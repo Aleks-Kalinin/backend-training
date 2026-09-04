@@ -1,4 +1,4 @@
-import { UserResponseDto } from '@/modules/users/dto/user-response.dto';
+import { UserResponseDto } from '@/modules/users/dto/users.dto';
 import {
   Body,
   Controller,
@@ -7,16 +7,19 @@ import {
   HttpStatus,
   Post,
   Request,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { FastifyRequest } from 'fastify';
+import type { FastifyReply } from 'fastify';
 import { User } from '../../users/infrastructure/entity/users.entity';
 import { AuthService } from '../application/auth.service';
 import { AuthGuard } from '../auth.guard';
 import { AuthResponseDto } from '../dto/auth-response.dto';
 import { SignInDto } from '../dto/sign-in.dto';
 import { SignUpDto } from '../dto/sign-up.dto';
+import { VerifyRegistrationDto } from '../dto/verify-registration.dto';
 
 interface AuthenticatedRequest extends FastifyRequest {
   user: User;
@@ -50,8 +53,39 @@ export class AuthController {
     description: 'User successfully registered',
     type: AuthResponseDto,
   })
-  signUp(@Body() signUpDto: SignUpDto) {
-    return this.authService.signUp(signUpDto.email, signUpDto.password);
+  async signUp(
+    @Body() signUpDto: SignUpDto,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ) {
+    const result = await this.authService.signUp(
+      signUpDto.email,
+      signUpDto.password,
+    );
+    reply.status(result.statusCode);
+    return result.data;
+  }
+
+  @Post('signup/verify')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify registration email OTP' })
+  @ApiResponse({
+    status: 200,
+    description: 'Email verified and user authenticated',
+    type: AuthResponseDto,
+  })
+  @ApiResponse({
+    status: 422,
+    description: 'Invalid or expired verification code',
+  })
+  @ApiResponse({
+    status: 429,
+    description: 'Maximum verification attempts exceeded',
+  })
+  verifyRegistration(@Body() verifyRegistrationDto: VerifyRegistrationDto) {
+    return this.authService.verifyRegistration(
+      verifyRegistrationDto.attemptId,
+      verifyRegistrationDto.otp,
+    );
   }
 
   // TODO: Remove this endpoint after testing
