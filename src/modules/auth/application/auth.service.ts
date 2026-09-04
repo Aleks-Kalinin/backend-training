@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { MailService } from '../../mail/application/mail.service';
 import { SettingsService } from '../../settings/application/settings.service';
 import { SETTING_KEYS } from '../../settings/dto/settings.dto';
 import { UsersService } from '../../users/application/users.service';
@@ -31,6 +32,7 @@ export class AuthService {
     private jwtService: JwtService,
     private verificationService: VerificationService,
     private settingsService: SettingsService,
+    private mailService: MailService,
   ) {}
 
   async signUp(email: string, pass: string): Promise<SignUpResult> {
@@ -61,11 +63,13 @@ export class AuthService {
       };
     }
 
-    const { attemptId } =
+    const { attemptId, rawOtp } =
       await this.verificationService.createVerificationRecord(
         user.userId,
         VerificationTokenType.REGISTRATION,
       );
+
+    await this.mailService.sendVerificationOtp(user.email, rawOtp);
 
     return {
       statusCode: HttpStatus.ACCEPTED,

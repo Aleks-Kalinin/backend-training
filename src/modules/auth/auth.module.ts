@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
+import { MailModule } from '../mail/mail.module';
 import { SettingsModule } from '../settings/settings.module';
 import { UsersModule } from '../users/users.module';
 import { VerificationModule } from '../verification/verification.module';
@@ -12,6 +13,7 @@ import { jwtConstants } from './presentation/constants/auth.constants';
     UsersModule,
     SettingsModule,
     VerificationModule,
+    MailModule,
     JwtModule.register({
       global: true,
       secret: jwtConstants.secret,
