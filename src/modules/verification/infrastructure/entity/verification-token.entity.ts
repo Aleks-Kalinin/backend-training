@@ -7,7 +7,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { User } from '../../../users/infrastructure/entity/users.entity';
+import { User } from '../../../users/infrastructure/entity/user.entity';
 
 export enum VerificationTokenType {
   REGISTRATION = 'REGISTRATION',

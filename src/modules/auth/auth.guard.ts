@@ -7,12 +7,13 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { FastifyRequest } from 'fastify';
 
-type AuthTokenPayload = {
+export type AuthTokenPayload = {
   sub: number;
   email: string;
+  roles: string[];
 };
 
-type AuthenticatedRequest = FastifyRequest & {
+export type AuthenticatedRequest = FastifyRequest & {
   user?: AuthTokenPayload;
 };
 
