@@ -11,7 +11,7 @@ import { MailService } from '../../mail/application/mail.service';
 import { SettingsService } from '../../settings/application/settings.service';
 import { SETTING_KEYS } from '../../settings/dto/settings.dto';
 import { UsersService } from '../../users/application/users.service';
-import { UserStatus } from '../../users/dto/users.dto';
+import { UserStatus } from '../../users/domain/user-status.enum';
 import { VerificationService } from '../../verification/application/verification.service';
 import { VerificationTokenType } from '../../verification/infrastructure/entity/verification-token.entity';
 
@@ -55,7 +55,8 @@ export class AuthService {
     });
 
     if (!isVerificationRequired) {
-      const payload = { sub: user.userId, email: user.email };
+      const roleNames = user.roles ? user.roles.map((role) => role.name) : [];
+      const payload = { sub: user.userId, email: user.email, roles: roleNames };
       const access_token = await this.jwtService.signAsync(payload);
       return {
         statusCode: HttpStatus.CREATED,
@@ -93,7 +94,8 @@ export class AuthService {
       status: UserStatus.ACTIVE,
     });
 
-    const payload = { sub: user.userId, email: user.email };
+    const roleNames = user.roles ? user.roles.map((role) => role.name) : [];
+    const payload = { sub: user.userId, email: user.email, roles: roleNames };
     return {
       access_token: await this.jwtService.signAsync(payload),
     };
@@ -125,7 +127,8 @@ export class AuthService {
       // Generate OTP and send to user via email/SMS
     }
 
-    const payload = { sub: user.userId, email: user.email };
+    const roleNames = user.roles ? user.roles.map((role) => role.name) : [];
+    const payload = { sub: user.userId, email: user.email, roles: roleNames };
 
     return {
       access_token: await this.jwtService.signAsync(payload),

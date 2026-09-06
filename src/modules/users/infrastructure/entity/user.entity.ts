@@ -1,12 +1,15 @@
+import { Role } from '@/modules/rbac/infrastructure/entities/role.entity';
 import {
   Column,
   CreateDateColumn,
   Entity,
   Index,
+  JoinTable,
+  ManyToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { UserStatus } from '../../dto/users.dto';
+import { UserStatus } from '../../domain/user-status.enum';
 
 @Entity('users')
 @Index(['email'], { unique: true })
@@ -31,4 +34,12 @@ export class User {
 
   @UpdateDateColumn()
   updatedAt!: Date;
+
+  @ManyToMany(() => Role, { eager: true })
+  @JoinTable({
+    name: 'user_roles',
+    joinColumn: { name: 'user_id', referencedColumnName: 'userId' },
+    inverseJoinColumn: { name: 'role_id', referencedColumnName: 'id' },
+  })
+  roles!: Role[];
 }

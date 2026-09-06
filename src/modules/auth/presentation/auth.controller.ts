@@ -1,4 +1,4 @@
-import { UserResponseDto } from '@/modules/users/dto/users.dto';
+import { UserResponseDto } from '@/modules/users/dto/user-response.dto';
 import {
   Body,
   Controller,
@@ -11,9 +11,9 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { FastifyRequest } from 'fastify';
 import type { FastifyReply } from 'fastify';
-import { User } from '../../users/infrastructure/entity/users.entity';
+import { FastifyRequest } from 'fastify';
+import { User } from '../../users/infrastructure/entity/user.entity';
 import { AuthService } from '../application/auth.service';
 import { AuthGuard } from '../auth.guard';
 import { AuthResponseDto } from '../dto/auth-response.dto';
