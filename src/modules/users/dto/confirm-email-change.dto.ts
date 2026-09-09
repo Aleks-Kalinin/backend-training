@@ -9,7 +9,10 @@ export class ConfirmEmailChangeDto {
   @IsUUID()
   challengeId!: string;
 
-  @ApiProperty({ example: '123456', description: '6-digit OTP verification code' })
+  @ApiProperty({
+    example: '123456',
+    description: '6-digit OTP verification code',
+  })
   @IsString()
   code!: string;
 }

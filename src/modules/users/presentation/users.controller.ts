@@ -6,6 +6,7 @@ import { RbacGuard } from '@/modules/rbac/rbac.guard';
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -27,6 +28,7 @@ import { UpdateUserDto } from '../dto/update-user.dto';
 import { UserResponseDto } from '../dto/user-response.dto';
 import { InitiateEmailChangeDto } from '../dto/initiate-email-change.dto';
 import { ConfirmEmailChangeDto } from '../dto/confirm-email-change.dto';
+import { DeleteUserDto } from '../dto/delete-user.dto';
 
 @ApiTags('Users list')
 @UseGuards(AuthGuard, RbacGuard)
@@ -123,9 +125,13 @@ export class UsersContoller {
   async updateUser(
     @Param('id') id: UUID,
     @Body() updateUserDto: UpdateUserDto,
-    @Req() req: AuthenticatedRequest
+    @Req() req: AuthenticatedRequest,
   ) {
-    const updatedUser = await this.usersService.updateUser(id, updateUserDto, req.user!);
+    const updatedUser = await this.usersService.updateUser(
+      id,
+      updateUserDto,
+      req.user,
+    );
 
     return UserMapper.toProfileResponseDto(updatedUser, req.user!);
   }
@@ -133,7 +139,10 @@ export class UsersContoller {
   @Post('users/:id/email-change')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Initiate email change using OTP' })
-  @ApiResponse({ status: 200, description: 'Otp verification challenge dispatched successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Otp verification challenge dispatched successfully',
+  })
   @ApiResponse({
     status: 409,
     description: 'Proposed email is already in use',
@@ -144,13 +153,16 @@ export class UsersContoller {
     @Body() emailChangeDto: InitiateEmailChangeDto,
     @Req() req: AuthenticatedRequest,
   ) {
-    return this.usersService.initiateEmailChange(id, emailChangeDto, req.user!)
+    return this.usersService.initiateEmailChange(id, emailChangeDto, req.user!);
   }
 
   @Post('users/:id/email-change/confirm')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Confirm email change using OTP' })
-  @ApiResponse({ status: 200, description: 'Email change confirmed successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Email change confirmed successfully',
+  })
   @ApiResponse({
     status: 422,
     description: 'Invalid or expired OTP verification code',
@@ -161,6 +173,28 @@ export class UsersContoller {
     @Body() confirmDto: ConfirmEmailChangeDto,
     @Req() req: AuthenticatedRequest,
   ) {
-    return this.usersService.confirmEmailChange(id, confirmDto, req.user!)
+    return this.usersService.confirmEmailChange(id, confirmDto, req.user!);
+  }
+
+  @Delete('users/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete user' })
+  @ApiResponse({ status: 204, description: 'User successfully deleted' })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthenticated',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden',
+  })
+  @RequirePermission('users', 'delete')
+  @AllowSelf('id')
+  async deleteUser(
+    @Param('id') id: UUID,
+    @Body() deleteUserDto: DeleteUserDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    await this.usersService.deleteUser(id, deleteUserDto, req.user);
   }
 }

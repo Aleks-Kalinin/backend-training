@@ -2,11 +2,14 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsEmail, IsEnum, IsOptional } from 'class-validator';
 
 export enum EmailChangeMethod {
-  OTP = 'otp'
+  OTP = 'otp',
 }
 
 export class InitiateEmailChangeDto {
-  @ApiProperty({ example: 'newemail@example.com', description: 'New email address' })
+  @ApiProperty({
+    example: 'newemail@example.com',
+    description: 'New email address',
+  })
   @IsEmail()
   newEmail!: string;
 

@@ -1,4 +1,9 @@
-import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CreateUserDto } from '../dto/create-user.dto';
@@ -12,6 +17,7 @@ import { UUID } from 'node:crypto';
 import { InitiateEmailChangeDto } from '../dto/initiate-email-change.dto';
 import { VerificationTokenType } from '@/modules/verification/infrastructure/entity/verification-token.entity';
 import { ConfirmEmailChangeDto } from '../dto/confirm-email-change.dto';
+import { DeleteUserDto } from '../dto/delete-user.dto';
 
 @Injectable()
 export class UsersService {
@@ -25,52 +31,54 @@ export class UsersService {
   async initiateEmailChange(
     userId: UUID,
     dto: InitiateEmailChangeDto,
-    requestingUser: AuthTokenPayload
+    requestingUser: AuthTokenPayload,
   ) {
     if (String(userId) !== String(requestingUser.sub)) {
-      throw new ForbiddenException("You can only change your own profile");
+      throw new ForbiddenException('You can only change your own profile');
     }
 
     const targetEmail = dto.newEmail.trim().toLowerCase();
     const existing = await this.findOne(targetEmail);
     if (existing) {
-      throw new ConflictException("Email already exists")
+      throw new ConflictException('Email already exists');
     }
 
     const challenge = await this.verificationService.createVerificationRecord(
       userId,
       VerificationTokenType.EMAIL_CHANGE,
-      targetEmail
-    )
+      targetEmail,
+    );
 
-    await this.mailService.sendVerificationOtp(targetEmail, challenge.rawOtp)
+    await this.mailService.sendVerificationOtp(targetEmail, challenge.rawOtp);
 
     return {
       requiresConfirmation: true,
-      challengeId: challenge.attemptId
-    }
+      challengeId: challenge.attemptId,
+    };
   }
 
   async confirmEmailChange(
     userId: UUID,
     dto: ConfirmEmailChangeDto,
-    requestingUser: AuthTokenPayload
+    requestingUser: AuthTokenPayload,
   ) {
     if (String(userId) !== String(requestingUser.sub)) {
-      throw new ForbiddenException("You can only change your own profile");
+      throw new ForbiddenException('You can only change your own profile');
     }
 
     const record = await this.verificationService.verifyOtp(
       dto.challengeId,
       dto.code,
-      VerificationTokenType.EMAIL_CHANGE
-    )
+      VerificationTokenType.EMAIL_CHANGE,
+    );
 
     if (String(record.userId) !== String(userId)) {
       throw new ForbiddenException('Invalid challenge session for user.');
     }
     if (!record.targetEmail) {
-      throw new ConflictException('No pending email address associated with challenge.');
+      throw new ConflictException(
+        'No pending email address associated with challenge.',
+      );
     }
 
     const targetEmail = record.targetEmail.trim().toLowerCase();
@@ -118,7 +126,11 @@ export class UsersService {
     return this.usersRepository.save(newUser);
   }
 
-  async updateUser(userId: string, updateData: UpdateUserDto, requestingUser?: AuthTokenPayload): Promise<User> {
+  async updateUser(
+    userId: string,
+    updateData: UpdateUserDto,
+    requestingUser?: AuthTokenPayload,
+  ): Promise<User> {
     const user = await this.usersRepository.findOne({ where: { userId } });
     if (!user) {
       throw new Error('User not found');
@@ -134,19 +146,22 @@ export class UsersService {
       }
 
       if (isSelf && !isAdmin && updateData.email !== undefined) {
-        throw new ForbiddenException('Direct email updates are not allowed. Use the dedicated endpoint for email changes.');
+        throw new ForbiddenException(
+          'Direct email updates are not allowed. Use the dedicated endpoint for email changes.',
+        );
       }
     }
 
     if (updateData.email && updateData.email !== user.email) {
-      const existingUser = await this.usersRepository.findOne({ where: { email: updateData.email.trim().toLowerCase() } });
+      const existingUser = await this.usersRepository.findOne({
+        where: { email: updateData.email.trim().toLowerCase() },
+      });
       if (existingUser) {
         throw new ConflictException('Email already exists');
       }
 
       updateData.email = updateData.email.toLowerCase().trim();
     }
-
 
     Object.assign(user, updateData);
     return this.usersRepository.save(user);
@@ -189,5 +204,41 @@ export class UsersService {
     const users = await queryBuilder.getMany();
 
     return users;
+  }
+
+  async deleteUser(
+    userId: UUID,
+    dto: DeleteUserDto = {},
+    requestingUser?: AuthTokenPayload,
+  ): Promise<void> {
+    const user = await this.usersRepository.findOne({ where: { userId } });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (requestingUser) {
+      const isSelf = userId === String(requestingUser.sub);
+      const isAdmin = requestingUser.roles.includes('admin');
+
+      if (isSelf && !isAdmin) {
+        if (!dto.challengeId || !dto.code) {
+          throw new ForbiddenException(
+            'Self-deletion requires email OTP verification. Please provide challengeId and code.',
+          );
+        }
+
+        const record = await this.verificationService.verifyOtp(
+          dto.challengeId,
+          dto.code,
+        );
+
+        if (String(record.userId) !== String(userId)) {
+          throw new ForbiddenException('Invalid challenge session for user.');
+        }
+      }
+    }
+
+    await this.usersRepository.remove(user);
   }
 }
