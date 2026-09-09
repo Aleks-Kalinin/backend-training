@@ -17,13 +17,13 @@ import { VerificationTokenType } from '../../verification/infrastructure/entity/
 
 export type SignUpResult =
   | {
-      statusCode: HttpStatus.CREATED;
-      data: { user: { id: string; email: string }; access_token: string };
-    }
+    statusCode: HttpStatus.CREATED;
+    data: { user: { id: string; email: string }; access_token: string };
+  }
   | {
-      statusCode: HttpStatus.ACCEPTED;
-      data: { message: string; verificationRequired: true; attemptId: string };
-    };
+    statusCode: HttpStatus.ACCEPTED;
+    data: { message: string; verificationRequired: true; attemptId: string };
+  };
 
 @Injectable()
 export class AuthService {
@@ -33,7 +33,7 @@ export class AuthService {
     private verificationService: VerificationService,
     private settingsService: SettingsService,
     private mailService: MailService,
-  ) {}
+  ) { }
 
   async signUp(email: string, pass: string): Promise<SignUpResult> {
     const normalizedEmail = email.trim().toLowerCase();
@@ -86,10 +86,10 @@ export class AuthService {
     attemptId: string,
     otp: string,
   ): Promise<{ access_token: string }> {
-    const userId = await this.verificationService.verifyOtp(attemptId, otp);
+    const token = await this.verificationService.verifyOtp(attemptId, otp);
 
     // Activate user upon successful verification
-    const user = await this.usersService.updateUser(userId, {
+    const user = await this.usersService.updateUser(token.userId, {
       isVerified: true,
       status: UserStatus.ACTIVE,
     });

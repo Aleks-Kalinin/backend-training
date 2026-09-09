@@ -7,10 +7,12 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   NotFoundException,
   Param,
+  Patch,
   Post,
-  Put,
   Query,
   Req,
   UseGuards,
@@ -23,12 +25,14 @@ import { CreateUserDto } from '../dto/create-user.dto';
 import { GetUsersQueryDto } from '../dto/get-users-query.dto';
 import { UpdateUserDto } from '../dto/update-user.dto';
 import { UserResponseDto } from '../dto/user-response.dto';
+import { InitiateEmailChangeDto } from '../dto/initiate-email-change.dto';
+import { ConfirmEmailChangeDto } from '../dto/confirm-email-change.dto';
 
 @ApiTags('Users list')
 @UseGuards(AuthGuard, RbacGuard)
 @Controller('admin')
 export class UsersContoller {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(private readonly usersService: UsersService) { }
 
   @Get('users')
   @ApiOperation({ summary: 'Get all users' })
@@ -100,7 +104,7 @@ export class UsersContoller {
     return user;
   }
 
-  @Put('users/:id')
+  @Patch('users/:id')
   @ApiOperation({ summary: 'Update an existing user' })
   @ApiResponse({
     status: 200,
@@ -115,11 +119,48 @@ export class UsersContoller {
     description: 'Forbidden',
   })
   @RequirePermission('users', 'update')
-  async updateUser(@Body() userId: UUID, updateUserDto: UpdateUserDto) {
-    const updatedUser = await this.usersService.updateUser(
-      userId,
-      updateUserDto,
-    );
-    return updatedUser;
+  @AllowSelf('id')
+  async updateUser(
+    @Param('id') id: UUID,
+    @Body() updateUserDto: UpdateUserDto,
+    @Req() req: AuthenticatedRequest
+  ) {
+    const updatedUser = await this.usersService.updateUser(id, updateUserDto, req.user!);
+
+    return UserMapper.toProfileResponseDto(updatedUser, req.user!);
+  }
+
+  @Post('users/:id/email-change')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Initiate email change using OTP' })
+  @ApiResponse({ status: 200, description: 'Otp verification challenge dispatched successfully' })
+  @ApiResponse({
+    status: 409,
+    description: 'Proposed email is already in use',
+  })
+  @AllowSelf('id')
+  async initiateEmailChange(
+    @Param('id') id: UUID,
+    @Body() emailChangeDto: InitiateEmailChangeDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.usersService.initiateEmailChange(id, emailChangeDto, req.user!)
+  }
+
+  @Post('users/:id/email-change/confirm')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Confirm email change using OTP' })
+  @ApiResponse({ status: 200, description: 'Email change confirmed successfully' })
+  @ApiResponse({
+    status: 422,
+    description: 'Invalid or expired OTP verification code',
+  })
+  @AllowSelf('id')
+  async confirmEmailChange(
+    @Param('id') id: UUID,
+    @Body() confirmDto: ConfirmEmailChangeDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.usersService.confirmEmailChange(id, confirmDto, req.user!)
   }
 }

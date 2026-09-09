@@ -11,6 +11,7 @@ import { User } from '../../../users/infrastructure/entity/user.entity';
 
 export enum VerificationTokenType {
   REGISTRATION = 'REGISTRATION',
+  EMAIL_CHANGE = 'EMAIL_CHANGE',
 }
 
 @Entity('verification_tokens')
@@ -27,6 +28,9 @@ export class VerificationToken {
 
   @Column({ type: 'enum', enum: VerificationTokenType })
   type!: VerificationTokenType;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  targetEmail?: string | null;
 
   @Column({ type: 'varchar', length: 255 })
   tokenHash!: string;

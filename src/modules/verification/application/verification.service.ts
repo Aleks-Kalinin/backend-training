@@ -29,7 +29,11 @@ export class VerificationService {
     return crypto.randomInt(100000, 999999).toString();
   }
 
-  async createVerificationRecord(userId: string, type: VerificationTokenType) {
+  async createVerificationRecord(
+    userId: string,
+    type: VerificationTokenType,
+    targetEmail?: string,
+  ) {
     const otp = this.generateOtp();
     const tokenHash = await bcrypt.hash(otp, 10);
     const expiresAt = new Date(Date.now() + this.OTP_TTL_MINUTES * 60 * 1000);
@@ -43,6 +47,7 @@ export class VerificationService {
       this.verificationTokenRepository.create({
         userId,
         type,
+        targetEmail,
         tokenHash,
         expiresAt,
       }),
@@ -56,11 +61,15 @@ export class VerificationService {
     return { attemptId: record.verificationTokenId, rawOtp: otp };
   }
 
-  async verifyOtp(attemptId: string, inputOtp: string): Promise<string> {
+  async verifyOtp(
+    attemptId: string,
+    inputOtp: string,
+    expectedType: VerificationTokenType = VerificationTokenType.REGISTRATION,
+  ): Promise<VerificationToken> {
     const record = await this.verificationTokenRepository.findOne({
       where: {
         verificationTokenId: attemptId,
-        type: VerificationTokenType.REGISTRATION,
+        type: expectedType,
         consumedAt: IsNull(),
       },
     });
@@ -96,6 +105,6 @@ export class VerificationService {
     record.consumedAt = new Date();
     await this.verificationTokenRepository.save(record);
 
-    return record.userId;
+    return record;
   }
 }
