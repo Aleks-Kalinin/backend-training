@@ -29,6 +29,7 @@ import { UserResponseDto } from '../dto/user-response.dto';
 import { InitiateEmailChangeDto } from '../dto/initiate-email-change.dto';
 import { ConfirmEmailChangeDto } from '../dto/confirm-email-change.dto';
 import { DeleteUserDto } from '../dto/delete-user.dto';
+import { Throttle } from '@nestjs/throttler';
 
 @ApiTags('Users list')
 @UseGuards(AuthGuard, RbacGuard)
@@ -52,6 +53,7 @@ export class UsersContoller {
     status: 403,
     description: 'Forbidden',
   })
+  @Throttle({ default: { ttl: 10000, limit: 5 } })
   @RequirePermission('users', 'read')
   async getUsers(@Query() query: GetUsersQueryDto) {
     const users = await this.usersService.getUsers(query);
@@ -64,7 +66,6 @@ export class UsersContoller {
     status: 200,
     description: 'User profile retrieved successfully',
     type: UserResponseDto,
-    isArray: true,
   })
   @ApiResponse({
     status: 401,
@@ -74,6 +75,7 @@ export class UsersContoller {
     status: 403,
     description: 'Forbidden',
   })
+  @Throttle({ default: { ttl: 10000, limit: 5 } })
   @RequirePermission('users', 'read')
   @AllowSelf('id')
   async getUser(@Param('id') id: UUID, @Req() req: AuthenticatedRequest) {
@@ -120,6 +122,11 @@ export class UsersContoller {
     status: 403,
     description: 'Forbidden',
   })
+  @ApiResponse({
+    status: 429,
+    description: 'Too many requests',
+  })
+  @Throttle({ default: { ttl: 10000, limit: 5 } })
   @RequirePermission('users', 'update')
   @AllowSelf('id')
   async updateUser(
@@ -167,6 +174,11 @@ export class UsersContoller {
     status: 422,
     description: 'Invalid or expired OTP verification code',
   })
+  @ApiResponse({
+    status: 429,
+    description: 'Too many requests',
+  })
+  @Throttle({ default: { ttl: 10000, limit: 5 } })
   @AllowSelf('id')
   async confirmEmailChange(
     @Param('id') id: UUID,
@@ -208,6 +220,7 @@ export class UsersContoller {
     status: 429,
     description: 'Too many attempts. Please try again later',
   })
+  @Throttle({ default: { ttl: 10000, limit: 5 } })
   @RequirePermission('users', 'delete')
   @AllowSelf('id')
   async deleteUser(
