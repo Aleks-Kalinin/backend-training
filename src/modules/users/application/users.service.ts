@@ -25,6 +25,8 @@ import {
 } from '../infrastructure/entity/user-deletion-job.entity';
 import { DeleteUserResponseDto } from '../dto/delete-user-response.dto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { Role } from '@/modules/rbac/infrastructure/entities/role.entity';
+import { SystemRole } from '@/modules/rbac/domain/system-role.enum';
 
 @Injectable()
 export class UsersService {
@@ -33,6 +35,8 @@ export class UsersService {
     private readonly usersRepository: Repository<User>,
     @InjectRepository(UserDeletionJob)
     private readonly userDeletionJobRepository: Repository<UserDeletionJob>,
+    @InjectRepository(Role)
+    private readonly roleRepository: Repository<Role>,
     private readonly verificationService: VerificationService,
     private readonly mailService: MailService,
     private readonly eventEmitter: EventEmitter2,
@@ -133,6 +137,14 @@ export class UsersService {
       status,
       isVerified,
     });
+
+    const userRole = await this.roleRepository.findOne({
+      where: { name: SystemRole.USER },
+    });
+    if (userRole) {
+      newUser.roles = [userRole];
+    }
+
     return this.usersRepository.save(newUser);
   }
 
@@ -149,7 +161,7 @@ export class UsersService {
     if (requestingUser) {
       const isSelf = userId === String(requestingUser.sub);
 
-      const isAdmin = requestingUser.roles.includes('ADMIN');
+      const isAdmin = requestingUser.roles.includes(SystemRole.ADMIN);
 
       if (!isSelf && !isAdmin) {
         throw new ForbiddenException('Insufficient permissions');
@@ -220,7 +232,7 @@ export class UsersService {
     userId: UUID,
     dto: DeleteUserDto = {},
     requestingUser?: AuthTokenPayload,
-    isAsync: boolean = true,
+    isAsync: boolean = false,
   ): Promise<DeleteUserResponseDto> {
     const user = await this.usersRepository.findOne({ where: { userId } });
 
@@ -246,7 +258,7 @@ export class UsersService {
 
     if (requestingUser) {
       const isSelf = userId === String(requestingUser.sub);
-      const isAdmin = requestingUser.roles.includes('ADMIN');
+      const isAdmin = requestingUser.roles.includes(SystemRole.ADMIN);
 
       if (isSelf && !isAdmin) {
         if (!dto.challengeId || !dto.code) {
@@ -356,7 +368,7 @@ export class UsersService {
 
     if (requestingUser) {
       const isSelf = userId === String(requestingUser.sub);
-      const isAdmin = requestingUser.roles.includes('ADMIN');
+      const isAdmin = requestingUser.roles.includes(SystemRole.ADMIN);
 
       if (!isSelf && !isAdmin) {
         throw new ForbiddenException('Insufficient permissions');

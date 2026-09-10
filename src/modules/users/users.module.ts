@@ -8,9 +8,11 @@ import { VerificationModule } from '../verification/verification.module';
 import { UserDeletionJob } from './infrastructure/entity/user-deletion-job.entity';
 import { UserDeletionListener } from './application/listeners/user-deletion.listener';
 
+import { Role } from '../rbac/infrastructure/entities/role.entity';
+
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, UserDeletionJob]),
+    TypeOrmModule.forFeature([User, UserDeletionJob, Role]),
     VerificationModule,
     MailModule,
   ],
