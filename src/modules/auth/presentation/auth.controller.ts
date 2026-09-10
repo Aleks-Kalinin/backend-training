@@ -20,6 +20,7 @@ import { AuthResponseDto } from '../dto/auth-response.dto';
 import { SignInDto } from '../dto/sign-in.dto';
 import { SignUpDto } from '../dto/sign-up.dto';
 import { VerifyRegistrationDto } from '../dto/verify-registration.dto';
+import { Throttle } from '@nestjs/throttler';
 
 interface AuthenticatedRequest extends FastifyRequest {
   user: User;
@@ -42,6 +43,11 @@ export class AuthController {
     status: 401,
     description: 'Invalid credentials',
   })
+  @ApiResponse({
+    status: 429,
+    description: 'Too many requests',
+  })
+  @Throttle({ default: { ttl: 10000, limit: 5 } })
   signIn(@Body() signInDto: SignInDto) {
     return this.authService.signIn(signInDto.email, signInDto.password);
   }
@@ -81,27 +87,11 @@ export class AuthController {
     status: 429,
     description: 'Maximum verification attempts exceeded',
   })
+  @Throttle({ default: { ttl: 10000, limit: 5 } })
   verifyRegistration(@Body() verifyRegistrationDto: VerifyRegistrationDto) {
     return this.authService.verifyRegistration(
       verifyRegistrationDto.attemptId,
       verifyRegistrationDto.otp,
     );
-  }
-
-  // TODO: Remove this endpoint after testing
-  @UseGuards(AuthGuard)
-  @Get('profile')
-  @ApiResponse({
-    status: 200,
-    description: 'Successfully retrieved user profile',
-    type: UserResponseDto,
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Unauthorized',
-  })
-  @ApiOperation({ summary: 'Get the authenticated user profile' })
-  getProfile(@Request() req: AuthenticatedRequest) {
-    return req.user;
   }
 }

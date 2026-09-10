@@ -114,9 +114,8 @@ describe('VerificationService', () => {
       updatedAt: new Date(),
     } as VerificationToken);
 
-    await expect(service.verifyOtp('attempt-id', '123456')).resolves.toBe(
-      'user-id',
-    );
+    const result = await service.verifyOtp('attempt-id', '123456');
+    expect(result.userId).toBe('user-id');
     expect(repository.save).toHaveBeenCalledWith(
       expect.objectContaining({ consumedAt: expect.any(Date) }),
     );

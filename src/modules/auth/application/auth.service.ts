@@ -86,10 +86,10 @@ export class AuthService {
     attemptId: string,
     otp: string,
   ): Promise<{ access_token: string }> {
-    const userId = await this.verificationService.verifyOtp(attemptId, otp);
+    const token = await this.verificationService.verifyOtp(attemptId, otp);
 
     // Activate user upon successful verification
-    const user = await this.usersService.updateUser(userId, {
+    const user = await this.usersService.updateUser(token.userId, {
       isVerified: true,
       status: UserStatus.ACTIVE,
     });

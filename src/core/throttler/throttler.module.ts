@@ -15,6 +15,7 @@ import { ConfigService } from '@/core/config/config.service';
 
         return [
           {
+            name: 'default',
             ttl,
             limit,
           },
