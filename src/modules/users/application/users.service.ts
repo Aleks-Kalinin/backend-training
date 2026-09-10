@@ -18,15 +18,25 @@ import { InitiateEmailChangeDto } from '../dto/initiate-email-change.dto';
 import { VerificationTokenType } from '@/modules/verification/infrastructure/entity/verification-token.entity';
 import { ConfirmEmailChangeDto } from '../dto/confirm-email-change.dto';
 import { DeleteUserDto } from '../dto/delete-user.dto';
+import {
+  DeletionExecutionMode,
+  DeletionJobStatus,
+  UserDeletionJob,
+} from '../infrastructure/entity/user-deletion-job.entity';
+import { DeleteUserResponseDto } from '../dto/delete-user-response.dto';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
+    @InjectRepository(UserDeletionJob)
+    private readonly userDeletionJobRepository: Repository<UserDeletionJob>,
     private readonly verificationService: VerificationService,
     private readonly mailService: MailService,
-  ) { }
+    private readonly eventEmitter: EventEmitter2,
+  ) {}
 
   async initiateEmailChange(
     userId: UUID,
@@ -139,7 +149,7 @@ export class UsersService {
     if (requestingUser) {
       const isSelf = userId === String(requestingUser.sub);
 
-      const isAdmin = requestingUser.roles.includes('admin');
+      const isAdmin = requestingUser.roles.includes('ADMIN');
 
       if (!isSelf && !isAdmin) {
         throw new ForbiddenException('Insufficient permissions');
@@ -210,27 +220,60 @@ export class UsersService {
     userId: UUID,
     dto: DeleteUserDto = {},
     requestingUser?: AuthTokenPayload,
-  ): Promise<void> {
+    isAsync: boolean = true,
+  ): Promise<DeleteUserResponseDto> {
     const user = await this.usersRepository.findOne({ where: { userId } });
 
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
+    const existingJob = await this.userDeletionJobRepository.findOne({
+      where: { userId },
+      order: { createdAt: 'DESC' },
+    });
+
+    if (
+      existingJob &&
+      [DeletionJobStatus.IN_PROGRESS, DeletionJobStatus.PENDING].includes(
+        existingJob.status,
+      )
+    ) {
+      throw new ConflictException(
+        'Deletion request is already in progress or pending.',
+      );
+    }
+
     if (requestingUser) {
       const isSelf = userId === String(requestingUser.sub);
-      const isAdmin = requestingUser.roles.includes('admin');
+      const isAdmin = requestingUser.roles.includes('ADMIN');
 
       if (isSelf && !isAdmin) {
         if (!dto.challengeId || !dto.code) {
-          throw new ForbiddenException(
-            'Self-deletion requires email OTP verification. Please provide challengeId and code.',
+          const challenge =
+            await this.verificationService.createVerificationRecord(
+              String(userId),
+              VerificationTokenType.USER_DELETION,
+              user.email,
+            );
+
+          await this.mailService.sendVerificationOtp(
+            user.email,
+            challenge.rawOtp,
           );
+
+          return {
+            requiresConfirmation: true,
+            challengeId: challenge.attemptId,
+            message:
+              'Verification OTP sent to your email. Please submit request with challengeId and code.',
+          } as any;
         }
 
         const record = await this.verificationService.verifyOtp(
           dto.challengeId,
           dto.code,
+          VerificationTokenType.USER_DELETION,
         );
 
         if (String(record.userId) !== String(userId)) {
@@ -239,6 +282,93 @@ export class UsersService {
       }
     }
 
-    await this.usersRepository.remove(user);
+    const requestedBy = requestingUser?.sub ? String(requestingUser.sub) : null;
+
+    const job = this.userDeletionJobRepository.create({
+      userId: String(userId),
+      reason: dto.reason,
+      requestedBy,
+      status: isAsync
+        ? DeletionJobStatus.PENDING
+        : DeletionJobStatus.IN_PROGRESS,
+      mode: isAsync ? DeletionExecutionMode.ASYNC : DeletionExecutionMode.SYNC,
+    });
+
+    await this.userDeletionJobRepository.save(job);
+
+    if (isAsync) {
+      this.eventEmitter.emit('user.delete.request', {
+        jobId: job.id,
+        userId: String(userId),
+      });
+
+      return {
+        jobId: job.id,
+        status: DeletionJobStatus.PENDING,
+        requestedBy: job.requestedBy,
+        createdAt: job.createdAt,
+        updatedAt: job.updatedAt,
+        mode: job.mode,
+      };
+    } else {
+      await this.processUserDeletion(job, user);
+      return {
+        jobId: job.id,
+        status: DeletionJobStatus.DONE,
+        requestedBy: job.requestedBy,
+        createdAt: job.createdAt,
+        updatedAt: job.updatedAt,
+        mode: job.mode,
+      };
+    }
+  }
+
+  async processUserDeletion(job: UserDeletionJob, user: User) {
+    try {
+      job.status = DeletionJobStatus.IN_PROGRESS;
+      await this.userDeletionJobRepository.save(job);
+
+      await this.usersRepository.remove(user);
+
+      job.status = DeletionJobStatus.DONE;
+    } catch (error) {
+      job.status = DeletionJobStatus.FAILED;
+      job.errorMessage =
+        error instanceof Error ? error.message : 'Failed to delete user';
+      throw error;
+    } finally {
+      await this.userDeletionJobRepository.save(job);
+    }
+  }
+
+  async getUserDeletionStatus(
+    userId: string,
+    requestingUser?: AuthTokenPayload,
+  ) {
+    const job = await this.userDeletionJobRepository.findOne({
+      where: { userId },
+      order: { createdAt: 'DESC' },
+    });
+
+    if (!job) {
+      throw new NotFoundException('Job not found');
+    }
+
+    if (requestingUser) {
+      const isSelf = userId === String(requestingUser.sub);
+      const isAdmin = requestingUser.roles.includes('ADMIN');
+
+      if (!isSelf && !isAdmin) {
+        throw new ForbiddenException('Insufficient permissions');
+      }
+    }
+
+    return {
+      jobId: job.id,
+      status: job.status,
+      requestedBy: job.requestedBy,
+      createdAt: job.createdAt,
+      updatedAt: job.updatedAt,
+    };
   }
 }

@@ -32,11 +32,11 @@ import { DeleteUserDto } from '../dto/delete-user.dto';
 
 @ApiTags('Users list')
 @UseGuards(AuthGuard, RbacGuard)
-@Controller('admin')
+@Controller()
 export class UsersContoller {
-  constructor(private readonly usersService: UsersService) { }
+  constructor(private readonly usersService: UsersService) {}
 
-  @Get('users')
+  @Get('admin/users')
   @ApiOperation({ summary: 'Get all users' })
   @ApiResponse({
     status: 200,
@@ -177,9 +177,17 @@ export class UsersContoller {
   }
 
   @Delete('users/:id')
-  @HttpCode(HttpStatus.NO_CONTENT)
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Delete user' })
-  @ApiResponse({ status: 204, description: 'User successfully deleted' })
+  @ApiResponse({
+    status: 200,
+    description: 'User deletion initiated or completed successfully',
+  })
+  @ApiResponse({
+    status: 202,
+    description:
+      'User deletion request accepted and will be processed asynchronously',
+  })
   @ApiResponse({
     status: 401,
     description: 'Unauthenticated',
@@ -188,6 +196,18 @@ export class UsersContoller {
     status: 403,
     description: 'Forbidden',
   })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'User is already deleted',
+  })
+  @ApiResponse({
+    status: 429,
+    description: 'Too many attempts. Please try again later',
+  })
   @RequirePermission('users', 'delete')
   @AllowSelf('id')
   async deleteUser(
@@ -195,6 +215,37 @@ export class UsersContoller {
     @Body() deleteUserDto: DeleteUserDto,
     @Req() req: AuthenticatedRequest,
   ) {
-    await this.usersService.deleteUser(id, deleteUserDto, req.user);
+    return await this.usersService.deleteUser(id, deleteUserDto, req.user);
+  }
+
+  @Get('users/:id/deletion-status')
+  @ApiOperation({ summary: 'Get user deletion status' })
+  @ApiResponse({
+    status: 200,
+    description: 'User deletion status retrieved successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthenticated',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
+  })
+  @ApiResponse({
+    status: 422,
+    description: 'Invalid or expired deletion reason',
+  })
+  @RequirePermission('users', 'read')
+  @AllowSelf('id')
+  async getUserDeletionStatus(
+    @Param('id') id: UUID,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.usersService.getUserDeletionStatus(id, req.user);
   }
 }
