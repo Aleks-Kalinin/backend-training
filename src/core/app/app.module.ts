@@ -16,6 +16,7 @@ import { ThrottlerGuard } from '@nestjs/throttler';
 import { AuthModule } from '@/modules/auth/auth.module';
 import { RbacModule } from '@/modules/rbac/rbac.module';
 import { UsersModule } from '@/modules/users/users.module';
+import { ConversionModule } from '@/modules/conversion/conversion.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { UsersModule } from '@/modules/users/users.module';
     UsersModule,
     AuthModule,
     RbacModule,
+    ConversionModule,
   ],
   providers: [
     {

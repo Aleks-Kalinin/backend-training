@@ -1,5 +1,6 @@
 import compression from '@fastify/compress';
 import fastifyCookie from '@fastify/cookie';
+import multipart from '@fastify/multipart';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import {
@@ -48,6 +49,8 @@ async function bootstrap() {
   });
 
   await app.register(compression);
+
+  await app.register(multipart);
 
   const config = new DocumentBuilder()
     .setTitle('My API')
