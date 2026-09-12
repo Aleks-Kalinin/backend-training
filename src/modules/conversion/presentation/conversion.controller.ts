@@ -1,27 +1,28 @@
+import { Readable } from 'node:stream';
 import {
   BadRequestException,
-  Body,
   Controller,
   Get,
-  Param,
   Post,
-  Query,
   Req,
   Res,
   UnsupportedMediaTypeException,
-  UploadedFile,
-  UseInterceptors,
+  PayloadTooLargeException,
+  UseGuards,
 } from '@nestjs/common';
 import { ConversionService } from '../application/conversion.service';
 import { TextFileFormat } from '../domain/text-file-format.enum';
-import { ImageFileFormat } from '../domain/image-file-format.enum';
 import { type MultipartFile } from '@fastify/multipart';
 import { ApiResponse } from '@nestjs/swagger';
 import type { FastifyRequest, FastifyReply } from 'fastify';
+import { RequirePermission } from '@/modules/rbac/presentation/decorators/require-permission.decorator';
+import { RbacGuard } from '@/modules/rbac/rbac.guard';
+import { AuthGuard } from '@/modules/auth/auth.guard';
 
 @Controller()
+@UseGuards(AuthGuard, RbacGuard)
 export class ConversionController {
-  constructor(private readonly conversionService: ConversionService) {}
+  constructor(private readonly conversionService: ConversionService) { }
 
   @Post('api/convert')
   @ApiResponse({
@@ -48,37 +49,54 @@ export class ConversionController {
     status: 415,
     description: 'Unsupported file format',
   })
+  @RequirePermission('files', 'create')
   async convertFile(
     @Req() req: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ) {
-    const file = await req.file();
+    let rawFilePart: MultipartFile | undefined;
+    let fileBuffer: Buffer | undefined;
+    let targetFormat: TextFileFormat | undefined;
 
-    if (!file) {
+    for await (const part of req.parts()) {
+      if (part.type === 'file') {
+        rawFilePart = part;
+        try {
+          fileBuffer = await part.toBuffer();
+        } catch (err: any) {
+          if (err?.code === 'FST_REQ_FILE_TOO_LARGE') {
+            throw new PayloadTooLargeException('File size exceeds limit');
+          }
+          throw err;
+        }
+      } else if (part.fieldname === 'targetFormat') {
+        targetFormat = part.value as TextFileFormat;
+      }
+    }
+
+    if (!rawFilePart || !fileBuffer) {
       throw new BadRequestException('File is required');
     }
 
-    const targetFormatField = file.fields['targetFormat'];
-
-    if (
-      !targetFormatField ||
-      Array.isArray(targetFormatField) ||
-      targetFormatField.type !== 'field'
-    ) {
+    if (!targetFormat) {
       throw new BadRequestException('targetFormat field is required');
     }
-
-    const targetFormat = targetFormatField.value as TextFileFormat;
 
     if (!Object.values(TextFileFormat).includes(targetFormat)) {
       throw new UnsupportedMediaTypeException('Invalid target format');
     }
 
+    // Reconstruct a valid MultipartFile object with preserved metadata and refreshed stream
+    const file: MultipartFile = {
+      ...rawFilePart,
+      file: Readable.from(fileBuffer) as any,
+      toBuffer: async () => Promise.resolve(fileBuffer),
+    };
+
     const { content } = await this.conversionService.convertFile(
       file,
       targetFormat,
     );
-
     const contentTypeMap: Record<string, string> = {
       csv: 'text/csv',
       json: 'application/json',
@@ -99,6 +117,7 @@ export class ConversionController {
   }
 
   @Get('api/convert/formats')
+  @RequirePermission('files', 'read')
   @ApiResponse({
     status: 200,
     description: 'Available formats retrieved successfully',
@@ -111,7 +130,7 @@ export class ConversionController {
     status: 403,
     description: 'Forbidden',
   })
-  async getAvailableFormats() {
+  getAvailableFormats() {
     return [
       { source: 'csv', target: ['json', 'xml', 'yaml'] },
       { source: 'json', target: ['csv', 'xml', 'yaml'] },

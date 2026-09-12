@@ -3,9 +3,6 @@ import {
   PayloadTooLargeException,
   UnsupportedMediaTypeException,
 } from '@nestjs/common';
-import { File } from '../infrastructure/entity/file.entity';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import { TextFileFormat } from '../domain/text-file-format.enum';
 import { ImageFileFormat } from '../domain/image-file-format.enum';
 import { parse as parseCsv } from 'csv-parse/sync';
@@ -17,9 +14,8 @@ import { type MultipartFile } from '@fastify/multipart';
 import { detectTextFormat } from './constants/mime-to-format.map';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import { FILE_SIZE_LIMIT } from './constants/file-size-limit';
 import { randomUUID } from 'node:crypto';
-
-const FILE_SIZE_LIMIT = 1024 * 1024 * 5; // 5MB
 
 @Injectable()
 export class ConversionService {
