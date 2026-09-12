@@ -8,6 +8,7 @@ import {
   Res,
   UnsupportedMediaTypeException,
   PayloadTooLargeException,
+  RequestTimeoutException,
   UseGuards,
 } from '@nestjs/common';
 import { ConversionService } from '../application/conversion.service';
@@ -22,7 +23,7 @@ import { AuthGuard } from '@/modules/auth/auth.guard';
 @Controller()
 @UseGuards(AuthGuard, RbacGuard)
 export class ConversionController {
-  constructor(private readonly conversionService: ConversionService) { }
+  constructor(private readonly conversionService: ConversionService) {}
 
   @Post('api/convert')
   @ApiResponse({
@@ -82,6 +83,10 @@ export class ConversionController {
       throw new BadRequestException('targetFormat field is required');
     }
 
+    if (fileBuffer?.length === 0) {
+      throw new BadRequestException('File is empty');
+    }
+
     if (!Object.values(TextFileFormat).includes(targetFormat)) {
       throw new UnsupportedMediaTypeException('Invalid target format');
     }
@@ -93,27 +98,53 @@ export class ConversionController {
       toBuffer: async () => Promise.resolve(fileBuffer),
     };
 
-    const { content } = await this.conversionService.convertFile(
-      file,
-      targetFormat,
-    );
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30_000);
+
     const contentTypeMap: Record<string, string> = {
       csv: 'text/csv',
       json: 'application/json',
       xml: 'application/xml',
       yaml: 'application/x-yaml',
     };
-    reply
-      .header(
-        'Content-Type',
-        contentTypeMap[targetFormat] ?? 'application/octet-stream',
-      )
-      .header(
-        'Content-Disposition',
-        `attachment; filename="converted.${targetFormat}"`,
+
+    try {
+      const conversionPromise = this.conversionService.convertFile(
+        file,
+        targetFormat,
+        controller.signal, // Pass signal to service
       );
 
-    return content;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        controller.signal.addEventListener('abort', () => {
+          reject(
+            new RequestTimeoutException(
+              'File conversion timed out after 30 seconds',
+            ),
+          );
+        });
+      });
+
+      // Race the conversion against the 30-second abort signal
+      const { content } = await Promise.race([
+        conversionPromise,
+        timeoutPromise,
+      ]);
+
+      reply
+        .header(
+          'Content-Type',
+          contentTypeMap[targetFormat] ?? 'application/octet-stream',
+        )
+        .header(
+          'Content-Disposition',
+          `attachment; filename="converted.${targetFormat}"`,
+        );
+
+      return content;
+    } finally {
+      clearTimeout(timeoutId); // Prevent memory leaks if task finishes before 30s
+    }
   }
 
   @Get('api/convert/formats')
