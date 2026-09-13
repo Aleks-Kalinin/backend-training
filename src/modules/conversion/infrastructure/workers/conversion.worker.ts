@@ -4,6 +4,16 @@ import { XMLParser } from 'fast-xml-parser';
 import XMLBuilder from 'fast-xml-builder';
 import yaml from 'yaml';
 import { BadRequestException } from '@nestjs/common';
+import sharp from 'sharp';
+import { ImageFileFormat } from '../../domain/image-file-format.enum';
+import { ImageConversionOptions } from '../../domain/image-conversion-options';
+import {
+  IMAGE_CONVERSION_MAX_SIZE,
+  IMAGE_CONVERSION_MIN_QUALITY,
+  IMAGE_CONVERSION_MAX_QUALITY,
+  IMAGE_CONVERSION_MIN_SIZE,
+} from '../../application/constants/image-conversion-restrictions';
+import { isString } from 'class-validator';
 
 export interface TextTaskData {
   buffer: Uint8Array;
@@ -15,6 +25,7 @@ export interface ImageTaskData {
   buffer: Uint8Array;
   originalFormat: string;
   targetFormat: string;
+  options: ImageConversionOptions;
 }
 
 function decodeTextBuffer(fileBuffer: Buffer): string {
@@ -131,8 +142,71 @@ export async function convertImageFile({
   buffer,
   originalFormat,
   targetFormat,
+  options,
 }: ImageTaskData) {
-  console.log(buffer);
-  console.log(originalFormat);
-  console.log(targetFormat);
+  let pipeline = sharp(Buffer.from(buffer));
+
+  if (
+    (originalFormat === ImageFileFormat.PNG ||
+      originalFormat === ImageFileFormat.JPEG) &&
+    targetFormat === ImageFileFormat.SVG
+  ) {
+    throw new BadRequestException('Cannot convert raster image to SVG format');
+  }
+
+  const width = options?.width;
+  const height = options?.height;
+  const background = options?.background;
+  const quality = options?.quality ?? 100;
+
+  if (
+    width &&
+    (width < IMAGE_CONVERSION_MIN_SIZE.width ||
+      width > IMAGE_CONVERSION_MAX_SIZE.width)
+  ) {
+    throw new BadRequestException('Invalid image width');
+  }
+
+  if (
+    height &&
+    (height < IMAGE_CONVERSION_MIN_SIZE.height ||
+      height > IMAGE_CONVERSION_MAX_SIZE.height)
+  ) {
+    throw new BadRequestException('Invalid image height');
+  }
+
+  if (
+    quality &&
+    (quality < IMAGE_CONVERSION_MIN_QUALITY ||
+      quality > IMAGE_CONVERSION_MAX_QUALITY)
+  ) {
+    throw new BadRequestException('Invalid image quality');
+  }
+
+  if (background && !isString(background)) {
+    throw new BadRequestException('Invalid background color');
+  }
+
+  if (width && height) {
+    pipeline = pipeline.resize(width, height, {
+      fit: 'cover',
+    });
+  }
+
+  if (background && originalFormat === ImageFileFormat.SVG) {
+    pipeline = pipeline.flatten({
+      background,
+    });
+  }
+
+  if (targetFormat === ImageFileFormat.JPEG) {
+    pipeline = pipeline.jpeg({ quality, mozjpeg: true });
+  } else if (targetFormat === ImageFileFormat.PNG) {
+    pipeline = pipeline.png({ quality, palette: true });
+  } else {
+    throw new BadRequestException('Unsupported target image format');
+  }
+
+  // Executed safely on the background libuv thread pool
+  return await pipeline.toBuffer();
 }

@@ -10,12 +10,17 @@ import Piscina from 'piscina';
 import { TextFileFormat } from '../domain/text-file-format.enum';
 import { ImageFileFormat } from '../domain/image-file-format.enum';
 import { type MultipartFile } from '@fastify/multipart';
-import { detectTextFormat } from './constants/mime-to-format.map';
+import {
+  detectTextFormat,
+  detectImageFormat,
+} from './constants/mime-to-format.map';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { FILE_SIZE_LIMITS } from './constants/file-size-limit';
 import { randomUUID } from 'node:crypto';
 import * as os from 'node:os';
+import { FILE_TYPE } from './constants/file-type';
+import { ImageConversionOptions } from '../domain/image-conversion-options';
 
 @Injectable()
 export class ConversionService implements OnModuleDestroy {
@@ -48,8 +53,13 @@ export class ConversionService implements OnModuleDestroy {
     file: MultipartFile,
     targetFormat: TextFileFormat | ImageFileFormat,
     signal: AbortSignal,
+    fileType: FILE_TYPE,
+    options?: ImageConversionOptions,
   ): Promise<{ content: string | Buffer; filePath: string }> {
-    const originalFormat = detectTextFormat(file.mimetype, file.filename);
+    const originalFormat =
+      fileType === FILE_TYPE.IMAGE
+        ? detectImageFormat(file.mimetype, file.filename)
+        : detectTextFormat(file.mimetype, file.filename);
 
     if (!originalFormat) {
       throw new UnsupportedMediaTypeException('Unsupported file format');
@@ -72,9 +82,23 @@ export class ConversionService implements OnModuleDestroy {
       };
     }
 
-    const isTextFile = Object.values(TextFileFormat).includes(originalFormat);
-    if (!isTextFile) {
-      throw new UnsupportedMediaTypeException('Unsupported file format');
+    const isTextFile = Object.values(TextFileFormat).includes(
+      originalFormat as TextFileFormat,
+    );
+    const isImageFile = Object.values(ImageFileFormat).includes(
+      originalFormat as ImageFileFormat,
+    );
+
+    if (fileType === FILE_TYPE.TEXT) {
+      if (!isTextFile) {
+        throw new UnsupportedMediaTypeException('Unsupported file format');
+      }
+    }
+
+    if (fileType === FILE_TYPE.IMAGE) {
+      if (!isImageFile) {
+        throw new UnsupportedMediaTypeException('Unsupported file format');
+      }
     }
 
     const workerTaskName = isTextFile ? 'convertTextFile' : 'convertImageFile';
@@ -85,6 +109,7 @@ export class ConversionService implements OnModuleDestroy {
           buffer,
           originalFormat,
           targetFormat,
+          options,
         },
         {
           name: workerTaskName,

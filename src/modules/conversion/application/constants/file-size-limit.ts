@@ -13,5 +13,7 @@ export const FILE_SIZE_LIMITS: Record<
   [TextFileFormat.CSV]: 5 * MB,
 
   [ImageFileFormat.JPEG]: 5 * MB,
+  [ImageFileFormat.JPG]: 5 * MB,
   [ImageFileFormat.PNG]: 5 * MB,
+  [ImageFileFormat.SVG]: 5 * MB,
 };
