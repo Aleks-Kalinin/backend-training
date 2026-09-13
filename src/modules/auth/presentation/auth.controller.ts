@@ -2,29 +2,19 @@ import { UserResponseDto } from '@/modules/users/dto/user-response.dto';
 import {
   Body,
   Controller,
-  Get,
   HttpCode,
   HttpStatus,
   Post,
-  Request,
   Res,
-  UseGuards,
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { FastifyReply } from 'fastify';
-import { FastifyRequest } from 'fastify';
-import { User } from '../../users/infrastructure/entity/user.entity';
 import { AuthService } from '../application/auth.service';
-import { AuthGuard } from '../auth.guard';
 import { AuthResponseDto } from '../dto/auth-response.dto';
 import { SignInDto } from '../dto/sign-in.dto';
 import { SignUpDto } from '../dto/sign-up.dto';
 import { VerifyRegistrationDto } from '../dto/verify-registration.dto';
 import { Throttle } from '@nestjs/throttler';
-
-interface AuthenticatedRequest extends FastifyRequest {
-  user: User;
-}
 
 @ApiTags('Authentication')
 @Controller('auth')
