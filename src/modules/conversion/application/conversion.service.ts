@@ -13,7 +13,7 @@ import { type MultipartFile } from '@fastify/multipart';
 import { detectTextFormat } from './constants/mime-to-format.map';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import { FILE_SIZE_LIMIT } from './constants/file-size-limit';
+import { FILE_SIZE_LIMITS } from './constants/file-size-limit';
 import { randomUUID } from 'node:crypto';
 import * as os from 'node:os';
 
@@ -60,7 +60,8 @@ export class ConversionService implements OnModuleDestroy {
     }
 
     const buffer = await file.toBuffer();
-    if (buffer.length > FILE_SIZE_LIMIT) {
+    const fileSizeLimit = FILE_SIZE_LIMITS[targetFormat];
+    if (buffer.length > fileSizeLimit) {
       throw new PayloadTooLargeException('File size exceeds limit');
     }
 
