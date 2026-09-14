@@ -14,6 +14,8 @@ import {
   IMAGE_CONVERSION_MIN_SIZE,
 } from '../../application/constants/image-conversion-restrictions';
 import { isString } from 'class-validator';
+import DOMPurify from 'isomorphic-dompurify';
+import { MAX_PIXEL_LIMIT } from '../../application/constants/max-pixel-limit';
 
 export interface TextTaskData {
   buffer: Uint8Array;
@@ -138,14 +140,44 @@ export async function convertTextFile({
   throw new Error(`Unsupported text target format: ${targetFormat}`);
 }
 
+function sanitizeSvgContent(buffer: Uint8Array | Buffer): Buffer {
+  const nodeBuffer = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
+  const svgString = nodeBuffer.toString('utf-8');
+
+  // Strip scripts, event handlers, frames, and embedded active elements
+  const cleanSvg = DOMPurify.sanitize(svgString, {
+    USE_PROFILES: { svg: true, svgFilters: true },
+    FORBID_TAGS: [
+      'script',
+      'iframe',
+      'foreignObject',
+      'object',
+      'embed',
+      'form',
+      'input',
+    ],
+    FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onfocus'],
+  });
+
+  // Ban remote assets (external URLs, CSS @import)
+  const containsExternalResources =
+    /href\s*=\s*["']?\s*https?:\/\//i.test(cleanSvg) ||
+    /@import\s+url/i.test(cleanSvg) ||
+    /url\s*\(\s*["']?\s*https?:\/\//i.test(cleanSvg);
+
+  if (containsExternalResources) {
+    throw new BadRequestException('SVG contains forbidden external resources');
+  }
+
+  return Buffer.from(cleanSvg);
+}
+
 export async function convertImageFile({
   buffer,
   originalFormat,
   targetFormat,
   options,
 }: ImageTaskData) {
-  let pipeline = sharp(Buffer.from(buffer));
-
   if (
     (originalFormat === ImageFileFormat.PNG ||
       originalFormat === ImageFileFormat.JPEG) &&
@@ -186,6 +218,16 @@ export async function convertImageFile({
   if (background && !isString(background)) {
     throw new BadRequestException('Invalid background color');
   }
+
+  let inputBuffer = buffer;
+  if (originalFormat === ImageFileFormat.SVG) {
+    inputBuffer = sanitizeSvgContent(buffer);
+  }
+
+  let pipeline = sharp(inputBuffer, {
+    limitInputPixels: MAX_PIXEL_LIMIT,
+    density: 300, // Safe default density for rasterizing SVG vector elements
+  });
 
   if (width && height) {
     pipeline = pipeline.resize(width, height, {
