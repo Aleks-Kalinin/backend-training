@@ -19,6 +19,9 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { RequirePermission } from '@/modules/rbac/presentation/decorators/require-permission.decorator';
 import { RbacGuard } from '@/modules/rbac/rbac.guard';
 import { AuthGuard } from '@/modules/auth/auth.guard';
+import { ImageFileFormat } from '../domain/image-file-format.enum';
+import { FILE_TYPE } from '../application/constants/file-type';
+import { ImageConversionOptions } from '../domain/image-conversion-options';
 
 @Controller()
 @UseGuards(AuthGuard, RbacGuard)
@@ -113,6 +116,7 @@ export class ConversionController {
         file,
         targetFormat,
         controller.signal, // Pass signal to service
+        FILE_TYPE.TEXT,
       );
 
       const timeoutPromise = new Promise<never>((_, reject) => {
@@ -148,7 +152,6 @@ export class ConversionController {
   }
 
   @Get('api/convert/formats')
-  @RequirePermission('files', 'read')
   @ApiResponse({
     status: 200,
     description: 'Available formats retrieved successfully',
@@ -161,12 +164,166 @@ export class ConversionController {
     status: 403,
     description: 'Forbidden',
   })
+  @RequirePermission('files', 'read')
   getAvailableFormats() {
     return [
       { source: 'csv', target: ['json', 'xml', 'yaml'] },
       { source: 'json', target: ['csv', 'xml', 'yaml'] },
       { source: 'xml', target: ['json', 'csv', 'yaml'] },
       { source: 'yaml', target: ['json', 'csv', 'xml'] },
+    ];
+  }
+
+  @Post('api/images/convert')
+  @ApiResponse({
+    status: 200,
+    description: 'Image converted successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid image format or size',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden',
+  })
+  @ApiResponse({
+    status: 413,
+    description: 'Image size exceeds limit',
+  })
+  @ApiResponse({
+    status: 415,
+    description: 'Unsupported image format',
+  })
+  @RequirePermission('files', 'create')
+  async convertImage(
+    @Req() req: FastifyRequest,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ) {
+    let rawFilePart: MultipartFile | undefined;
+    let fileBuffer: Buffer | undefined;
+    let targetFormat: ImageFileFormat | undefined;
+    let options: ImageConversionOptions = {};
+
+    for await (const part of req.parts()) {
+      if (part.type === 'file') {
+        rawFilePart = part;
+        try {
+          fileBuffer = await part.toBuffer();
+        } catch (err: any) {
+          if (err?.code === 'FST_REQ_FILE_TOO_LARGE') {
+            throw new PayloadTooLargeException('File size exceeds limit');
+          }
+          throw err;
+        }
+      } else if (part.fieldname === 'targetFormat') {
+        targetFormat = part.value as ImageFileFormat;
+      } else if (part.fieldname === 'options') {
+        try {
+          options = JSON.parse(part.value as string);
+        } catch {
+          throw new BadRequestException('Invalid options JSON');
+        }
+      }
+    }
+
+    if (!rawFilePart || !fileBuffer) {
+      throw new BadRequestException('Image file is required');
+    }
+
+    if (!targetFormat) {
+      throw new BadRequestException('targetFormat field is required');
+    }
+
+    if (fileBuffer?.length === 0) {
+      throw new BadRequestException('Image file is empty');
+    }
+
+    if (!Object.values(ImageFileFormat).includes(targetFormat)) {
+      throw new UnsupportedMediaTypeException('Invalid target format');
+    }
+
+    const file: MultipartFile = {
+      ...rawFilePart,
+      file: Readable.from(fileBuffer) as any,
+      toBuffer: async () => Promise.resolve(fileBuffer),
+    };
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30_000);
+
+    const contentTypeMap: Record<string, string> = {
+      jpeg: 'image/jpeg',
+      png: 'image/png',
+      svg: 'image/svg+xml',
+      jpg: 'image/jpeg',
+    };
+
+    try {
+      const conversionPromise = this.conversionService.convertFile(
+        file,
+        targetFormat,
+        controller.signal,
+        FILE_TYPE.IMAGE,
+        options,
+      );
+
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        controller.signal.addEventListener('abort', () => {
+          reject(
+            new RequestTimeoutException(
+              'Image conversion timed out after 30 seconds',
+            ),
+          );
+        });
+      });
+
+      // Race the conversion against the 30-second abort signal
+      const { content } = await Promise.race([
+        conversionPromise,
+        timeoutPromise,
+      ]);
+
+      reply
+        .header(
+          'Content-Type',
+          contentTypeMap[targetFormat] ?? 'application/octet-stream',
+        )
+        .header(
+          'Content-Disposition',
+          `attachment; filename="converted.${targetFormat}"`,
+        );
+
+      return content;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  @Get('api/images/convert/formats')
+  @ApiResponse({
+    status: 200,
+    description: 'Available formats retrieved successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden',
+  })
+  @RequirePermission('files', 'read')
+  getAvailableImageFormats() {
+    return [
+      { source: 'jpeg', target: ['png', 'jpg'] },
+      { source: 'png', target: ['jpeg', 'jpg'] },
+      { source: 'svg', target: ['jpeg', 'png', 'jpg'] },
+      { source: 'jpg', target: ['jpeg', 'png'] },
     ];
   }
 }
