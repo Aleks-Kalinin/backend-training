@@ -1,0 +1,1 @@
+export const HISTORY_RETENTION_DAYS = 30;

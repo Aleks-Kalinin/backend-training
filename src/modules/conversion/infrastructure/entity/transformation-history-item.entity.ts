@@ -1,4 +1,10 @@
-import { Column, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  Index,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 import { FILE_TYPE } from '../../application/constants/file-type';
 import { FILE_CONVERSION_STATUS } from '../../application/constants/file-conversion-status';
 
@@ -28,10 +34,14 @@ export class TransformationHistoryItemEntity {
   @Column({ type: 'varchar', length: 255, nullable: true })
   errorCode!: string | null;
 
-  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  @Index()
+  @CreateDateColumn({
+    type: 'timestamptz',
+    default: () => 'CURRENT_TIMESTAMP',
+  })
   createdAt!: Date;
 
   @Index()
-  @Column({ name: 'user_id', type: 'uuid', nullable: true })
+  @Column({ type: 'uuid', nullable: true })
   userId!: string | null;
 }
