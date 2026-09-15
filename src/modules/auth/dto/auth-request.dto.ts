@@ -1,7 +1,8 @@
 import { FastifyRequest } from 'fastify';
+import { UUID } from 'node:crypto';
 
 export type AuthTokenPayload = {
-  sub: number;
+  sub: UUID;
   email: string;
   roles: string[];
 };
