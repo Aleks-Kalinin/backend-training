@@ -1,27 +1,23 @@
-import { Readable } from 'node:stream';
 import {
-  BadRequestException,
   Controller,
   Get,
   Post,
   Req,
   Res,
-  UnsupportedMediaTypeException,
-  PayloadTooLargeException,
-  RequestTimeoutException,
   UseGuards,
+  UnauthorizedException,
+  Param,
 } from '@nestjs/common';
 import { ConversionService } from '../application/conversion.service';
-import { TextFileFormat } from '../domain/text-file-format.enum';
-import { type MultipartFile } from '@fastify/multipart';
 import { ApiResponse } from '@nestjs/swagger';
-import type { FastifyRequest, FastifyReply } from 'fastify';
+import type { FastifyReply } from 'fastify';
 import { RequirePermission } from '@/modules/rbac/presentation/decorators/require-permission.decorator';
 import { RbacGuard } from '@/modules/rbac/rbac.guard';
 import { AuthGuard } from '@/modules/auth/auth.guard';
-import { ImageFileFormat } from '../domain/image-file-format.enum';
 import { FILE_TYPE } from '../application/constants/file-type';
-import { ImageConversionOptions } from '../domain/image-conversion-options';
+import { AllowSelf } from '@/modules/rbac/presentation/decorators/allow-self.decorator';
+import { type AuthenticatedRequest } from '@/modules/auth/dto/auth-request.dto';
+import { type UUID } from 'node:crypto';
 
 @Controller()
 @UseGuards(AuthGuard, RbacGuard)
@@ -54,101 +50,41 @@ export class ConversionController {
     description: 'Unsupported file format',
   })
   @RequirePermission('files', 'create')
-  async convertFile(
-    @Req() req: FastifyRequest,
+  async convertText(
+    @Req() req: AuthenticatedRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ) {
-    let rawFilePart: MultipartFile | undefined;
-    let fileBuffer: Buffer | undefined;
-    let targetFormat: TextFileFormat | undefined;
+    const userId = req.user?.sub;
 
-    for await (const part of req.parts()) {
-      if (part.type === 'file') {
-        rawFilePart = part;
-        try {
-          fileBuffer = await part.toBuffer();
-        } catch (err: any) {
-          if (err?.code === 'FST_REQ_FILE_TOO_LARGE') {
-            throw new PayloadTooLargeException('File size exceeds limit');
-          }
-          throw err;
-        }
-      } else if (part.fieldname === 'targetFormat') {
-        targetFormat = part.value as TextFileFormat;
-      }
+    if (!userId) {
+      throw new UnauthorizedException('User ID is required');
     }
 
-    if (!rawFilePart || !fileBuffer) {
-      throw new BadRequestException('File is required');
-    }
+    const { content, targetFormat } =
+      await this.conversionService.convertMultipartRequest(
+        req,
+        FILE_TYPE.TEXT,
+        userId,
+      );
 
-    if (!targetFormat) {
-      throw new BadRequestException('targetFormat field is required');
-    }
-
-    if (fileBuffer?.length === 0) {
-      throw new BadRequestException('File is empty');
-    }
-
-    if (!Object.values(TextFileFormat).includes(targetFormat)) {
-      throw new UnsupportedMediaTypeException('Invalid target format');
-    }
-
-    // Reconstruct a valid MultipartFile object with preserved metadata and refreshed stream
-    const file: MultipartFile = {
-      ...rawFilePart,
-      file: Readable.from(fileBuffer) as any,
-      toBuffer: async () => Promise.resolve(fileBuffer),
-    };
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30_000);
-
-    const contentTypeMap: Record<string, string> = {
+    const mimeTypes: Record<string, string> = {
       csv: 'text/csv',
       json: 'application/json',
       xml: 'application/xml',
       yaml: 'application/x-yaml',
     };
 
-    try {
-      const conversionPromise = this.conversionService.convertFile(
-        file,
-        targetFormat,
-        controller.signal, // Pass signal to service
-        FILE_TYPE.TEXT,
+    reply
+      .header(
+        'Content-Type',
+        mimeTypes[targetFormat] ?? 'application/octet-stream',
+      )
+      .header(
+        'Content-Disposition',
+        `attachment; filename="converted.${targetFormat}"`,
       );
 
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        controller.signal.addEventListener('abort', () => {
-          reject(
-            new RequestTimeoutException(
-              'File conversion timed out after 30 seconds',
-            ),
-          );
-        });
-      });
-
-      // Race the conversion against the 30-second abort signal
-      const { content } = await Promise.race([
-        conversionPromise,
-        timeoutPromise,
-      ]);
-
-      reply
-        .header(
-          'Content-Type',
-          contentTypeMap[targetFormat] ?? 'application/octet-stream',
-        )
-        .header(
-          'Content-Disposition',
-          `attachment; filename="converted.${targetFormat}"`,
-        );
-
-      return content;
-    } finally {
-      clearTimeout(timeoutId); // Prevent memory leaks if task finishes before 30s
-    }
+    return content;
   }
 
   @Get('api/convert/formats')
@@ -201,107 +137,40 @@ export class ConversionController {
   })
   @RequirePermission('files', 'create')
   async convertImage(
-    @Req() req: FastifyRequest,
+    @Req() req: AuthenticatedRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ) {
-    let rawFilePart: MultipartFile | undefined;
-    let fileBuffer: Buffer | undefined;
-    let targetFormat: ImageFileFormat | undefined;
-    let options: ImageConversionOptions = {};
+    const userId = req.user?.sub;
 
-    for await (const part of req.parts()) {
-      if (part.type === 'file') {
-        rawFilePart = part;
-        try {
-          fileBuffer = await part.toBuffer();
-        } catch (err: any) {
-          if (err?.code === 'FST_REQ_FILE_TOO_LARGE') {
-            throw new PayloadTooLargeException('File size exceeds limit');
-          }
-          throw err;
-        }
-      } else if (part.fieldname === 'targetFormat') {
-        targetFormat = part.value as ImageFileFormat;
-      } else if (part.fieldname === 'options') {
-        try {
-          options = JSON.parse(part.value as string);
-        } catch {
-          throw new BadRequestException('Invalid options JSON');
-        }
-      }
+    if (!userId) {
+      throw new UnauthorizedException('User ID is required');
     }
 
-    if (!rawFilePart || !fileBuffer) {
-      throw new BadRequestException('Image file is required');
-    }
-
-    if (!targetFormat) {
-      throw new BadRequestException('targetFormat field is required');
-    }
-
-    if (fileBuffer?.length === 0) {
-      throw new BadRequestException('Image file is empty');
-    }
-
-    if (!Object.values(ImageFileFormat).includes(targetFormat)) {
-      throw new UnsupportedMediaTypeException('Invalid target format');
-    }
-
-    const file: MultipartFile = {
-      ...rawFilePart,
-      file: Readable.from(fileBuffer) as any,
-      toBuffer: async () => Promise.resolve(fileBuffer),
-    };
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30_000);
-
-    const contentTypeMap: Record<string, string> = {
-      jpeg: 'image/jpeg',
-      png: 'image/png',
-      svg: 'image/svg+xml',
-      jpg: 'image/jpeg',
-    };
-
-    try {
-      const conversionPromise = this.conversionService.convertFile(
-        file,
-        targetFormat,
-        controller.signal,
+    const { content, targetFormat } =
+      await this.conversionService.convertMultipartRequest(
+        req,
         FILE_TYPE.IMAGE,
-        options,
+        userId,
       );
 
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        controller.signal.addEventListener('abort', () => {
-          reject(
-            new RequestTimeoutException(
-              'Image conversion timed out after 30 seconds',
-            ),
-          );
-        });
-      });
+    const mimeTypes: Record<string, string> = {
+      jpeg: 'image/jpeg',
+      jpg: 'image/jpeg',
+      png: 'image/png',
+      svg: 'image/svg+xml',
+    };
 
-      // Race the conversion against the 30-second abort signal
-      const { content } = await Promise.race([
-        conversionPromise,
-        timeoutPromise,
-      ]);
+    reply
+      .header(
+        'Content-Type',
+        mimeTypes[targetFormat] ?? 'application/octet-stream',
+      )
+      .header(
+        'Content-Disposition',
+        `attachment; filename="converted.${targetFormat}"`,
+      );
 
-      reply
-        .header(
-          'Content-Type',
-          contentTypeMap[targetFormat] ?? 'application/octet-stream',
-        )
-        .header(
-          'Content-Disposition',
-          `attachment; filename="converted.${targetFormat}"`,
-        );
-
-      return content;
-    } finally {
-      clearTimeout(timeoutId);
-    }
+    return content;
   }
 
   @Get('api/images/convert/formats')
@@ -325,5 +194,51 @@ export class ConversionController {
       { source: 'svg', target: ['jpeg', 'png', 'jpg'] },
       { source: 'jpg', target: ['jpeg', 'png'] },
     ];
+  }
+
+  @Get('api/transformations/history')
+  @ApiResponse({
+    status: 200,
+    description: 'Transformation history retrieved successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden',
+  })
+  @AllowSelf('userId')
+  getTransformationHistory(@Req() req: AuthenticatedRequest) {
+    const userId = req.user?.sub;
+
+    if (!userId) {
+      throw new Error('User ID is required');
+    }
+
+    return this.conversionService.getHistory(userId);
+  }
+
+  @Get('admin/users/:userId/transformations/history')
+  @ApiResponse({
+    status: 200,
+    description: 'Transformation history retrieved successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
+  })
+  @RequirePermission('history', 'read')
+  getAllTransformationHistory(@Param('userId') userId: UUID) {
+    return this.conversionService.getHistory(userId);
   }
 }

@@ -6,9 +6,10 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { FastifyRequest } from 'fastify';
+import { UUID } from 'node:crypto';
 
 export type AuthTokenPayload = {
-  sub: number;
+  sub: UUID;
   email: string;
   roles: string[];
 };

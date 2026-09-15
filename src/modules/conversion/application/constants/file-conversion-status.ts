@@ -1,0 +1,4 @@
+export enum FILE_CONVERSION_STATUS {
+  SUCCESS = 'SUCCESS',
+  ERROR = 'ERROR',
+}

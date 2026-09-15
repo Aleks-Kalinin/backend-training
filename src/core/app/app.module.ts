@@ -17,6 +17,7 @@ import { AuthModule } from '@/modules/auth/auth.module';
 import { RbacModule } from '@/modules/rbac/rbac.module';
 import { UsersModule } from '@/modules/users/users.module';
 import { ConversionModule } from '@/modules/conversion/conversion.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { ConversionModule } from '@/modules/conversion/conversion.module';
     AuthModule,
     RbacModule,
     ConversionModule,
+    ScheduleModule.forRoot(),
   ],
   providers: [
     {
