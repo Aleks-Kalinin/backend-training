@@ -1,6 +1,6 @@
 import compression from '@fastify/compress';
 import fastifyCookie from '@fastify/cookie';
-import multipart from '@fastify/multipart';
+import fastifyMultipart from '@fastify/multipart';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import {
@@ -12,9 +12,9 @@ import {
   initializeTransactionalContext,
   StorageDriver,
 } from 'typeorm-transactional';
-
 import { ConfigService } from '@/core/config/config.service';
 import { AppModule } from './core/app/app.module';
+import { GLOBAL_MAX_FILE_SIZE } from './modules/conversion/application/constants/file-size-limit';
 
 async function bootstrap() {
   initializeTransactionalContext({ storageDriver: StorageDriver.AUTO });
@@ -48,9 +48,13 @@ async function bootstrap() {
     secret: configService.get('COOKIE_SECRET'),
   });
 
-  await app.register(compression);
+  await app.register(fastifyMultipart, {
+    limits: {
+      fileSize: GLOBAL_MAX_FILE_SIZE ?? 1024 * 1024,
+    },
+  });
 
-  await app.register(multipart);
+  await app.register(compression);
 
   const config = new DocumentBuilder()
     .setTitle('My API')

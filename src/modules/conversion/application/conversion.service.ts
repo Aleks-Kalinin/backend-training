@@ -1,31 +1,31 @@
-import {
-  Injectable,
-  PayloadTooLargeException,
-  UnsupportedMediaTypeException,
-  RequestTimeoutException,
-  OnModuleDestroy,
-  BadRequestException,
-} from '@nestjs/common';
-import Piscina from 'piscina';
-import { TextFileFormat } from '../domain/text-file-format.enum';
-import { ImageFileFormat } from '../domain/image-file-format.enum';
 import { type MultipartFile } from '@fastify/multipart';
 import {
-  detectTextFormat,
-  detectImageFormat,
-} from './constants/mime-to-format.map';
-import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
-import { FILE_SIZE_LIMITS } from './constants/file-size-limit';
-import { randomUUID, UUID } from 'node:crypto';
-import * as os from 'node:os';
-import { FILE_TYPE } from './constants/file-type';
-import { ImageConversionOptions } from '../domain/image-conversion-options';
-import { TransformationHistoryItemEntity } from '../infrastructure/entity/transformation-history-item.entity';
-import { Repository } from 'typeorm';
+  BadRequestException,
+  Injectable,
+  OnModuleDestroy,
+  PayloadTooLargeException,
+  RequestTimeoutException,
+  UnsupportedMediaTypeException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { FILE_CONVERSION_STATUS } from './constants/file-conversion-status';
 import { FastifyRequest } from 'fastify';
+import { randomUUID, UUID } from 'node:crypto';
+import * as fs from 'node:fs/promises';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import Piscina from 'piscina';
+import { Repository } from 'typeorm';
+import { ImageConversionOptions } from '../domain/image-conversion-options';
+import { ImageFileFormat } from '../domain/image-file-format.enum';
+import { TextFileFormat } from '../domain/text-file-format.enum';
+import { TransformationHistoryItemEntity } from '../infrastructure/entity/transformation-history-item.entity';
+import { FILE_CONVERSION_STATUS } from './constants/file-conversion-status';
+import { FILE_SIZE_LIMITS } from './constants/file-size-limit';
+import { FILE_TYPE } from './constants/file-type';
+import {
+  detectImageFormat,
+  detectTextFormat,
+} from './constants/mime-to-format.map';
 
 interface LogHistoryParams {
   type: FILE_TYPE;
@@ -77,6 +77,7 @@ export class ConversionService implements OnModuleDestroy {
     let sourceFormat: string | null = null;
     let targetFormat: string | null = null;
     let fileSize = 0;
+    let streamError: Error | null = null;
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30_000);
@@ -88,7 +89,17 @@ export class ConversionService implements OnModuleDestroy {
 
       // 1. Parse Multipart Stream
       for await (const part of req.parts()) {
-        if (part.type === 'file') {
+        if (part.type === 'field') {
+          if (part.fieldname === 'targetFormat') {
+            targetFormat = part.value as string;
+          } else if (part.fieldname === 'options') {
+            try {
+              options = JSON.parse(part.value as string);
+            } catch {
+              streamError = streamError ?? new BadRequestException('Invalid options JSON');
+            }
+          }
+        } else if (part.type === 'file') {
           rawFilePart = part;
           sourceFormat =
             fileType === FILE_TYPE.IMAGE
@@ -99,20 +110,19 @@ export class ConversionService implements OnModuleDestroy {
             fileBuffer = await part.toBuffer();
             fileSize = fileBuffer.length;
           } catch (err: any) {
+            fileSize = part.file?.bytesRead ?? 0;
+
             if (err?.code === 'FST_REQ_FILE_TOO_LARGE') {
-              throw new PayloadTooLargeException('File size exceeds limit');
-            }
-            throw err;
-          }
-        } else if (part.fieldname === 'targetFormat') {
-          targetFormat = part.value as string;
-        } else if (part.fieldname === 'options') {
-          try {
-            options = JSON.parse(part.value as string);
-          } catch {
-            throw new BadRequestException('Invalid options JSON');
+              streamError = new PayloadTooLargeException('File size exceeds global upload limit');
+            } else {
+              streamError = err
+            };
           }
         }
+      }
+
+      if (streamError) {
+        throw streamError;
       }
 
       // 2. Early Input Validations
@@ -134,11 +144,11 @@ export class ConversionService implements OnModuleDestroy {
       const isValidTarget =
         fileType === FILE_TYPE.IMAGE
           ? Object.values(ImageFileFormat).includes(
-              targetFormat as ImageFileFormat,
-            )
+            targetFormat as ImageFileFormat,
+          )
           : Object.values(TextFileFormat).includes(
-              targetFormat as TextFileFormat,
-            );
+            targetFormat as TextFileFormat,
+          );
 
       if (!isValidTarget) {
         throw new UnsupportedMediaTypeException('Invalid target format');
@@ -201,18 +211,29 @@ export class ConversionService implements OnModuleDestroy {
 
       return { content: convertedContent, targetFormat };
     } catch (error: any) {
-      const normalizedError =
-        error.name === 'AbortError'
-          ? new RequestTimeoutException(
-              'File conversion timed out after 30 seconds',
-            )
-          : error instanceof BadRequestException ||
-              error instanceof UnsupportedMediaTypeException ||
-              error instanceof PayloadTooLargeException
-            ? error
-            : new BadRequestException(
-                error.message || 'File conversion failed',
-              );
+      let normalizedError: Error;
+
+      if (
+        error?.code === 'FST_REQ_FILE_TOO_LARGE' ||
+        error instanceof PayloadTooLargeException
+      ) {
+        normalizedError = new PayloadTooLargeException(
+          'File size exceeds global upload limit',
+        );
+      } else if (error.name === 'AbortError') {
+        normalizedError = new RequestTimeoutException(
+          'File conversion timed out after 30 seconds',
+        );
+      } else if (
+        error instanceof BadRequestException ||
+        error instanceof UnsupportedMediaTypeException
+      ) {
+        normalizedError = error;
+      } else {
+        normalizedError = new BadRequestException(
+          error.message || 'File conversion failed',
+        );
+      }
 
       // Always records DB log, capturing fileSize (if read) and fallback values
       await this.logHistory({

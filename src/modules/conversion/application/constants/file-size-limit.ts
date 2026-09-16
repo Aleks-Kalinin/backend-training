@@ -17,3 +17,7 @@ export const FILE_SIZE_LIMITS: Record<
   [ImageFileFormat.PNG]: 5 * MB,
   [ImageFileFormat.SVG]: 5 * MB,
 };
+
+export const GLOBAL_MAX_FILE_SIZE = Math.max(
+  ...Object.values(FILE_SIZE_LIMITS),
+);
