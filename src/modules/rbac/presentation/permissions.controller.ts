@@ -11,7 +11,12 @@ import {
   Put,
   UseGuards,
 } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { PermissionsService } from '../application/permissions.service';
 import { CreatePermissionDto } from '../dto/create-permission.dto';
 import { PermissionResponseDto } from '../dto/permission-response.dto';
@@ -20,6 +25,7 @@ import { RbacGuard } from '../rbac.guard';
 import { RequirePermission } from './decorators/require-permission.decorator';
 
 @ApiTags('Admin RBAC - Permissions')
+@ApiBearerAuth()
 @Controller('admin/rbac/permissions')
 @UseGuards(AuthGuard, RbacGuard)
 export class PermissionsController {

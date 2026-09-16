@@ -11,7 +11,12 @@ import {
   Put,
   UseGuards,
 } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { RolesService } from '../application/roles.service';
 import { CreateRoleDto } from '../dto/create-role.dto';
 import { RoleResponseDto } from '../dto/role-response.dto';
@@ -20,6 +25,7 @@ import { RbacGuard } from '../rbac.guard';
 import { RequirePermission } from './decorators/require-permission.decorator';
 
 @ApiTags('Admin RBAC - Roles')
+@ApiBearerAuth()
 @Controller('admin/rbac/roles')
 @UseGuards(AuthGuard, RbacGuard)
 export class RolesController {
@@ -27,7 +33,11 @@ export class RolesController {
 
   @Get()
   @ApiOperation({ summary: 'Get all roles' })
-  @ApiResponse({ status: HttpStatus.OK, type: [RoleResponseDto] })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    type: [RoleResponseDto],
+    description: 'Roles retrieved successfully',
+  })
   @RequirePermission('roles', 'read')
   async findAll(): Promise<RoleResponseDto[]> {
     const roles = await this.rolesService.findAll();
@@ -36,7 +46,11 @@ export class RolesController {
 
   @Post()
   @ApiOperation({ summary: 'Create a new role' })
-  @ApiResponse({ status: HttpStatus.CREATED, type: RoleResponseDto })
+  @ApiResponse({
+    status: HttpStatus.CREATED,
+    type: RoleResponseDto,
+    description: 'Role created successfully',
+  })
   @RequirePermission('roles', 'create')
   async create(@Body() createRoleDto: CreateRoleDto): Promise<RoleResponseDto> {
     const role = await this.rolesService.create(createRoleDto);
@@ -45,7 +59,11 @@ export class RolesController {
 
   @Put(':id')
   @ApiOperation({ summary: 'Update an existing role' })
-  @ApiResponse({ status: HttpStatus.OK, type: RoleResponseDto })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    type: RoleResponseDto,
+    description: 'Role updated successfully',
+  })
   @RequirePermission('roles', 'update')
   async update(
     @Param('id') id: string,

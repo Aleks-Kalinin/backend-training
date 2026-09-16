@@ -3,4 +3,5 @@ export interface ImageConversionOptions {
   width?: number;
   height?: number;
   background?: string;
+  save?: boolean;
 }

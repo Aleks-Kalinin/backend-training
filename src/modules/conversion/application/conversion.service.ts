@@ -6,10 +6,13 @@ import {
   PayloadTooLargeException,
   RequestTimeoutException,
   UnsupportedMediaTypeException,
+  NotFoundException,
+  StreamableFile,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FastifyRequest } from 'fastify';
 import { randomUUID, UUID } from 'node:crypto';
+import { createReadStream, existsSync } from 'node:fs';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -26,6 +29,7 @@ import {
   detectImageFormat,
   detectTextFormat,
 } from './constants/mime-to-format.map';
+import { ConvertedFileEntity } from '../infrastructure/entity/converted-file.entity';
 
 interface LogHistoryParams {
   type: FILE_TYPE;
@@ -34,8 +38,9 @@ interface LogHistoryParams {
   status: FILE_CONVERSION_STATUS;
   fileSize: number;
   startTime: number;
-  errorCode?: string;
+  errorCode?: string | null;
   userId: UUID;
+  fileId: UUID | null;
 }
 
 @Injectable()
@@ -44,6 +49,8 @@ export class ConversionService implements OnModuleDestroy {
   constructor(
     @InjectRepository(TransformationHistoryItemEntity)
     private readonly transformationHistoryRepository: Repository<TransformationHistoryItemEntity>,
+    @InjectRepository(ConvertedFileEntity)
+    private readonly convertedFileRepository: Repository<ConvertedFileEntity>,
   ) {
     this.piscina = new Piscina({
       filename: path.resolve(
@@ -77,6 +84,8 @@ export class ConversionService implements OnModuleDestroy {
     let sourceFormat: string | null = null;
     let targetFormat: string | null = null;
     let fileSize = 0;
+    let shouldSave = false;
+    let createdFileId: UUID | null = null;
     let streamError: Error | null = null;
 
     const controller = new AbortController();
@@ -92,11 +101,17 @@ export class ConversionService implements OnModuleDestroy {
         if (part.type === 'field') {
           if (part.fieldname === 'targetFormat') {
             targetFormat = part.value as string;
+          } else if (part.fieldname === 'save') {
+            shouldSave = part.value === 'true';
           } else if (part.fieldname === 'options') {
             try {
               options = JSON.parse(part.value as string);
+              if (options.save !== undefined) {
+                shouldSave = Boolean(options.save);
+              }
             } catch {
-              streamError = streamError ?? new BadRequestException('Invalid options JSON');
+              streamError =
+                streamError ?? new BadRequestException('Invalid options JSON');
             }
           }
         } else if (part.type === 'file') {
@@ -113,42 +128,33 @@ export class ConversionService implements OnModuleDestroy {
             fileSize = part.file?.bytesRead ?? 0;
 
             if (err?.code === 'FST_REQ_FILE_TOO_LARGE') {
-              streamError = new PayloadTooLargeException('File size exceeds global upload limit');
+              streamError = new PayloadTooLargeException(
+                'File size exceeds global upload limit',
+              );
             } else {
-              streamError = err
-            };
+              streamError = err;
+            }
           }
         }
       }
 
-      if (streamError) {
-        throw streamError;
-      }
-
-      // 2. Early Input Validations
-      if (!rawFilePart || !fileBuffer) {
+      if (streamError) throw streamError;
+      if (!rawFilePart || !fileBuffer)
         throw new BadRequestException('File is required');
-      }
-      if (!targetFormat) {
+      if (!targetFormat)
         throw new BadRequestException('targetFormat field is required');
-      }
-      if (fileSize === 0) {
-        throw new BadRequestException('File is empty');
-      }
-      if (!sourceFormat) {
-        throw new UnsupportedMediaTypeException(
-          'Unsupported source file format',
-        );
-      }
+      if (fileSize === 0) throw new BadRequestException('File is empty');
+      if (!sourceFormat)
+        throw new UnsupportedMediaTypeException('Unsupported source format');
 
       const isValidTarget =
         fileType === FILE_TYPE.IMAGE
           ? Object.values(ImageFileFormat).includes(
-            targetFormat as ImageFileFormat,
-          )
+              targetFormat as ImageFileFormat,
+            )
           : Object.values(TextFileFormat).includes(
-            targetFormat as TextFileFormat,
-          );
+              targetFormat as TextFileFormat,
+            );
 
       if (!isValidTarget) {
         throw new UnsupportedMediaTypeException('Invalid target format');
@@ -172,6 +178,7 @@ export class ConversionService implements OnModuleDestroy {
           fileSize,
           startTime,
           userId,
+          fileId: null,
         });
 
         return { content: fileBuffer, targetFormat };
@@ -196,7 +203,16 @@ export class ConversionService implements OnModuleDestroy {
         },
       );
 
-      await this.saveLocally(convertedContent, targetFormat);
+      if (shouldSave) {
+        const savedFilePath = await this.saveLocally(
+          convertedContent,
+          targetFormat,
+        );
+        const fileRecord = await this.convertedFileRepository.save({
+          filePath: savedFilePath,
+        });
+        createdFileId = fileRecord.id;
+      }
 
       // 6. Record Success
       await this.logHistory({
@@ -207,6 +223,7 @@ export class ConversionService implements OnModuleDestroy {
         fileSize,
         startTime,
         userId,
+        fileId: createdFileId,
       });
 
       return { content: convertedContent, targetFormat };
@@ -245,6 +262,7 @@ export class ConversionService implements OnModuleDestroy {
         startTime,
         errorCode: normalizedError.constructor.name || 'UNKNOWN_ERROR',
         userId,
+        fileId: createdFileId,
       });
 
       throw normalizedError;
@@ -257,6 +275,30 @@ export class ConversionService implements OnModuleDestroy {
     return this.transformationHistoryRepository.find({ where: { userId } });
   }
 
+  async getFileForDownload(userId: UUID, itemId: UUID) {
+    const historyItem = await this.transformationHistoryRepository.findOne({
+      where: { id: itemId, userId },
+      relations: ['file'],
+    });
+
+    if (!historyItem || !historyItem.file) {
+      throw new NotFoundException(
+        'Transformation record or associated file not found',
+      );
+    }
+
+    const filePath = historyItem.file.filePath;
+    if (!existsSync(filePath)) {
+      throw new NotFoundException('Physical file no longer exists on disk');
+    }
+
+    const stream = createReadStream(filePath);
+    return {
+      stream: new StreamableFile(stream),
+      targetFormat: historyItem.targetFormat,
+    };
+  }
+
   private async logHistory({
     type,
     sourceFormat,
@@ -266,6 +308,7 @@ export class ConversionService implements OnModuleDestroy {
     startTime,
     errorCode,
     userId,
+    fileId,
   }: LogHistoryParams) {
     const durationMs = Math.round(performance.now() - startTime);
 
@@ -280,6 +323,7 @@ export class ConversionService implements OnModuleDestroy {
         errorCode,
         createdAt: new Date(),
         userId,
+        fileId,
       });
     } catch (dbError) {
       console.error('Failed to log transformation history:', dbError);

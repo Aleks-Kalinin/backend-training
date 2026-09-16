@@ -11,7 +11,12 @@ import {
   Put,
   UseGuards,
 } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { GrantsService } from '../application/grants.service';
 import { CreateGrantDto } from '../dto/create-grant.dto';
 import { GrantResponseDto } from '../dto/grant-response.dto';
@@ -20,6 +25,7 @@ import { RbacGuard } from '../rbac.guard';
 import { RequirePermission } from './decorators/require-permission.decorator';
 
 @ApiTags('Admin RBAC - Grants')
+@ApiBearerAuth()
 @Controller('admin/rbac/grants')
 @UseGuards(AuthGuard, RbacGuard)
 export class GrantsController {

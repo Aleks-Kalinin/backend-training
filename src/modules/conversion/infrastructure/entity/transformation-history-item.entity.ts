@@ -3,10 +3,13 @@ import {
   CreateDateColumn,
   Entity,
   Index,
+  ManyToOne,
   PrimaryGeneratedColumn,
+  JoinColumn,
 } from 'typeorm';
 import { FILE_TYPE } from '../../application/constants/file-type';
 import { FILE_CONVERSION_STATUS } from '../../application/constants/file-conversion-status';
+import { ConvertedFileEntity } from './converted-file.entity';
 
 @Entity('file_conversion_history')
 export class TransformationHistoryItemEntity {
@@ -44,4 +47,14 @@ export class TransformationHistoryItemEntity {
   @Index()
   @Column({ type: 'uuid', nullable: true })
   userId!: string | null;
+
+  @Column({ name: 'file_id', type: 'uuid', nullable: true })
+  fileId!: string | null;
+
+  @ManyToOne(() => ConvertedFileEntity, {
+    onDelete: 'SET NULL',
+    nullable: true,
+  })
+  @JoinColumn({ name: 'file_id' })
+  file!: ConvertedFileEntity | null;
 }

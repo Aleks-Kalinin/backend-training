@@ -7,7 +7,12 @@ import {
   Post,
   Res,
 } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import type { FastifyReply } from 'fastify';
 import { AuthService } from '../application/auth.service';
 import { AuthResponseDto } from '../dto/auth-response.dto';
@@ -17,6 +22,7 @@ import { VerifyRegistrationDto } from '../dto/verify-registration.dto';
 import { Throttle } from '@nestjs/throttler';
 
 @ApiTags('Authentication')
+@ApiBearerAuth()
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
