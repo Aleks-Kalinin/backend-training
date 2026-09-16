@@ -18,7 +18,13 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiParam,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { type UUID } from 'node:crypto';
 import { UserMapper } from '../application/mappers/user.mapper';
 import { UsersService } from '../application/users.service';
@@ -29,9 +35,11 @@ import { UserResponseDto } from '../dto/user-response.dto';
 import { InitiateEmailChangeDto } from '../dto/initiate-email-change.dto';
 import { ConfirmEmailChangeDto } from '../dto/confirm-email-change.dto';
 import { DeleteUserDto } from '../dto/delete-user.dto';
+import { DeleteUserResponseDto } from '../dto/delete-user-response.dto';
 import { Throttle } from '@nestjs/throttler';
 
-@ApiTags('Users list')
+@ApiTags('Users')
+@ApiBearerAuth()
 @UseGuards(AuthGuard, RbacGuard)
 @Controller()
 export class UsersContoller {
@@ -62,6 +70,12 @@ export class UsersContoller {
 
   @Get('users/:id')
   @ApiOperation({ summary: 'Get user profile by id' })
+  @ApiParam({
+    name: 'id',
+    description: 'User ID (UUID)',
+    type: String,
+    format: 'uuid',
+  })
   @ApiResponse({
     status: 200,
     description: 'User profile retrieved successfully',
@@ -74,6 +88,10 @@ export class UsersContoller {
   @ApiResponse({
     status: 403,
     description: 'Forbidden',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
   })
   @Throttle({ default: { ttl: 10000, limit: 5 } })
   @RequirePermission('users', 'read')
@@ -91,8 +109,13 @@ export class UsersContoller {
   @Post('users')
   @ApiOperation({ summary: 'Create new user' })
   @ApiResponse({
-    status: 200,
+    status: 201,
     description: 'User successfully created',
+    type: UserResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - invalid input data',
   })
   @ApiResponse({
     status: 401,
@@ -110,9 +133,20 @@ export class UsersContoller {
 
   @Patch('users/:id')
   @ApiOperation({ summary: 'Update an existing user' })
+  @ApiParam({
+    name: 'id',
+    description: 'User ID (UUID)',
+    type: String,
+    format: 'uuid',
+  })
   @ApiResponse({
     status: 200,
     description: 'User successfully updated',
+    type: UserResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - invalid input data',
   })
   @ApiResponse({
     status: 401,
@@ -121,6 +155,10 @@ export class UsersContoller {
   @ApiResponse({
     status: 403,
     description: 'Forbidden',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
   })
   @ApiResponse({
     status: 429,
@@ -146,9 +184,31 @@ export class UsersContoller {
   @Post('users/:id/email-change')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Initiate email change using OTP' })
+  @ApiParam({
+    name: 'id',
+    description: 'User ID (UUID)',
+    type: String,
+    format: 'uuid',
+  })
   @ApiResponse({
     status: 200,
     description: 'Otp verification challenge dispatched successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - invalid email format',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthenticated',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
   })
   @ApiResponse({
     status: 409,
@@ -166,9 +226,31 @@ export class UsersContoller {
   @Post('users/:id/email-change/confirm')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Confirm email change using OTP' })
+  @ApiParam({
+    name: 'id',
+    description: 'User ID (UUID)',
+    type: String,
+    format: 'uuid',
+  })
   @ApiResponse({
     status: 200,
     description: 'Email change confirmed successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - invalid input data',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthenticated',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
   })
   @ApiResponse({
     status: 422,
@@ -191,14 +273,26 @@ export class UsersContoller {
   @Delete('users/:id')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Delete user' })
+  @ApiParam({
+    name: 'id',
+    description: 'User ID (UUID)',
+    type: String,
+    format: 'uuid',
+  })
   @ApiResponse({
     status: 200,
     description: 'User deletion initiated or completed successfully',
+    type: DeleteUserResponseDto,
   })
   @ApiResponse({
     status: 202,
     description:
       'User deletion request accepted and will be processed asynchronously',
+    type: DeleteUserResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - invalid deletion options',
   })
   @ApiResponse({
     status: 401,
@@ -233,9 +327,16 @@ export class UsersContoller {
 
   @Get('users/:id/deletion-status')
   @ApiOperation({ summary: 'Get user deletion status' })
+  @ApiParam({
+    name: 'id',
+    description: 'User ID (UUID)',
+    type: String,
+    format: 'uuid',
+  })
   @ApiResponse({
     status: 200,
     description: 'User deletion status retrieved successfully',
+    type: DeleteUserResponseDto,
   })
   @ApiResponse({
     status: 401,

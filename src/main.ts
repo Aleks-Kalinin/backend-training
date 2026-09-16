@@ -57,10 +57,22 @@ async function bootstrap() {
   await app.register(compression);
 
   const config = new DocumentBuilder()
-    .setTitle('My API')
-    .setDescription('API documentation')
-    .setVersion('1.0')
-    .addBearerAuth()
+    .setTitle('Backend Training API')
+    .setDescription(
+      'REST API documentation for Backend Training project including Authentication, RBAC, Users Management, Settings, Health, and File Conversion services.',
+    )
+    .setVersion('1.0.0')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        name: 'Authorization',
+        description: 'Enter JWT access token',
+        in: 'header',
+      },
+      'bearer',
+    )
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

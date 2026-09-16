@@ -9,7 +9,15 @@ import {
   Param,
 } from '@nestjs/common';
 import { ConversionService } from '../application/conversion.service';
-import { ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
+  ApiOperation,
+  ApiParam,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import type { FastifyReply } from 'fastify';
 import { RequirePermission } from '@/modules/rbac/presentation/decorators/require-permission.decorator';
 import { RbacGuard } from '@/modules/rbac/rbac.guard';
@@ -22,7 +30,6 @@ import {
   IMAGE_MIME_TYPES,
   TEXT_MIME_TYPES,
 } from '../application/constants/mime-types';
-import { ApiBearerAuth } from '@nestjs/swagger';
 
 @ApiTags('Files conversion and download')
 @ApiBearerAuth()
@@ -49,6 +56,30 @@ export class ConversionController {
   }
 
   @Post('api/convert')
+  @ApiOperation({
+    summary: 'Convert text file',
+    description:
+      'Uploads a text file (CSV, JSON, XML, YAML) via multipart/form-data and returns the converted content.',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file', 'targetFormat'],
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'Text file to convert (csv, json, xml, yaml)',
+        },
+        targetFormat: {
+          type: 'string',
+          enum: ['csv', 'json', 'xml', 'yaml'],
+          description: 'Target format for conversion',
+        },
+      },
+    },
+  })
   @ApiResponse({
     status: 200,
     description: 'File converted successfully',
@@ -125,6 +156,10 @@ export class ConversionController {
   }
 
   @Get('api/convert/formats')
+  @ApiOperation({
+    summary: 'Get available text conversion formats',
+    description: 'Returns supported source to target text format mappings.',
+  })
   @ApiResponse({
     status: 200,
     description: 'Available formats retrieved successfully',
@@ -168,6 +203,42 @@ export class ConversionController {
   }
 
   @Post('api/images/convert')
+  @ApiOperation({
+    summary: 'Convert image file',
+    description:
+      'Uploads an image file (JPEG, PNG, SVG, JPG) via multipart/form-data and returns the converted image.',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file', 'targetFormat'],
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'Image file to convert',
+        },
+        targetFormat: {
+          type: 'string',
+          enum: ['jpeg', 'png', 'svg', 'jpg'],
+          description: 'Target image format',
+        },
+        width: {
+          type: 'number',
+          description: 'Optional width in pixels',
+        },
+        height: {
+          type: 'number',
+          description: 'Optional height in pixels',
+        },
+        quality: {
+          type: 'number',
+          description: 'Optional image quality percentage (1-100)',
+        },
+      },
+    },
+  })
   @ApiResponse({
     status: 200,
     description: 'Image converted successfully',
@@ -254,6 +325,10 @@ export class ConversionController {
   }
 
   @Get('api/images/convert/formats')
+  @ApiOperation({
+    summary: 'Get available image conversion formats',
+    description: 'Returns supported source to target image format mappings.',
+  })
   @ApiResponse({
     status: 200,
     description: 'Available formats retrieved successfully',
@@ -297,6 +372,11 @@ export class ConversionController {
   }
 
   @Get('api/transformations/history')
+  @ApiOperation({
+    summary: 'Get transformation history',
+    description:
+      'Retrieves the list of previous file conversions performed by the logged-in user.',
+  })
   @ApiResponse({
     status: 200,
     description: 'Transformation history retrieved successfully',
@@ -344,6 +424,17 @@ export class ConversionController {
   }
 
   @Get('admin/users/:userId/transformations/history')
+  @ApiOperation({
+    summary: 'Get transformation history for specific user (Admin)',
+    description:
+      'Allows admin to view conversion history for a target user ID.',
+  })
+  @ApiParam({
+    name: 'userId',
+    description: 'User ID (UUID)',
+    type: String,
+    format: 'uuid',
+  })
   @ApiResponse({
     status: 200,
     description: 'Transformation history retrieved successfully',
@@ -394,6 +485,17 @@ export class ConversionController {
   }
 
   @Get('api/transformations/history/:itemId/download')
+  @ApiOperation({
+    summary: 'Download self-transformed file',
+    description:
+      'Downloads a converted file from history by item ID for the current user.',
+  })
+  @ApiParam({
+    name: 'itemId',
+    description: 'Transformation history item UUID',
+    type: String,
+    format: 'uuid',
+  })
   @ApiResponse({
     status: 200,
     description: 'Transformation history retrieved successfully',
@@ -448,6 +550,23 @@ export class ConversionController {
   }
 
   @Get('admin/users/:userId/transformations/history/:itemId/download')
+  @ApiOperation({
+    summary: 'Download transformed file for any user (Admin)',
+    description:
+      'Allows admin to download a converted file from a specific user history item.',
+  })
+  @ApiParam({
+    name: 'userId',
+    description: 'User ID (UUID)',
+    type: String,
+    format: 'uuid',
+  })
+  @ApiParam({
+    name: 'itemId',
+    description: 'Transformation history item UUID',
+    type: String,
+    format: 'uuid',
+  })
   @ApiResponse({
     status: 200,
     description: 'Transformation history retrieved successfully',

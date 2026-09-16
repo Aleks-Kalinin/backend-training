@@ -106,6 +106,9 @@
     ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node",
+    "transformIgnorePatterns": [
+      "node_modules/(?!@nestjs/event-emitter)"
+    ],
     "moduleNameMapper": {
       "^@/(.*)$": "<rootDir>/$1"
     }

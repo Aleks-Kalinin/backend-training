@@ -19,7 +19,10 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { SettingsService } from '../application/settings.service';
-import { UpdateVerificationSettingsDto } from '../dto/settings.dto';
+import {
+  UpdateVerificationSettingsDto,
+  VerificationSettingsResponseDto,
+} from '../dto/settings.dto';
 
 @ApiTags('Admin Settings')
 @ApiBearerAuth()
@@ -37,6 +40,7 @@ export class SettingsController {
   })
   @ApiOkResponse({
     description: 'Verification settings retrieved successfully.',
+    type: VerificationSettingsResponseDto,
   })
   @ApiUnauthorizedResponse({
     description: 'User is not authenticated.',
@@ -58,6 +62,7 @@ export class SettingsController {
   })
   @ApiOkResponse({
     description: 'Verification settings updated successfully.',
+    type: VerificationSettingsResponseDto,
   })
   @ApiUnauthorizedResponse({
     description: 'User is not authenticated.',

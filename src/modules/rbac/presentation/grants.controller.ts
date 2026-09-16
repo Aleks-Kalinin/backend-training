@@ -14,6 +14,7 @@ import {
 import {
   ApiBearerAuth,
   ApiOperation,
+  ApiParam,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
@@ -33,7 +34,13 @@ export class GrantsController {
 
   @Get()
   @ApiOperation({ summary: 'Get all grants' })
-  @ApiResponse({ status: HttpStatus.OK, type: [GrantResponseDto] })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Grants retrieved successfully',
+    type: [GrantResponseDto],
+  })
+  @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'Unauthorized' })
+  @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'Forbidden' })
   @RequirePermission('grants', 'read')
   async findAll(): Promise<GrantResponseDto[]> {
     const grants = await this.grantsService.findAll();
@@ -42,7 +49,14 @@ export class GrantsController {
 
   @Post()
   @ApiOperation({ summary: 'Create a new grant assignment' })
-  @ApiResponse({ status: HttpStatus.CREATED, type: GrantResponseDto })
+  @ApiResponse({
+    status: HttpStatus.CREATED,
+    description: 'Grant created successfully',
+    type: GrantResponseDto,
+  })
+  @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'Bad Request' })
+  @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'Unauthorized' })
+  @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'Forbidden' })
   @RequirePermission('grants', 'create')
   async create(
     @Body() createGrantDto: CreateGrantDto,
@@ -53,7 +67,21 @@ export class GrantsController {
 
   @Put(':id')
   @ApiOperation({ summary: 'Update allowed actions for a grant' })
-  @ApiResponse({ status: HttpStatus.OK, type: GrantResponseDto })
+  @ApiParam({
+    name: 'id',
+    description: 'Grant ID (UUID)',
+    type: String,
+    format: 'uuid',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Grant updated successfully',
+    type: GrantResponseDto,
+  })
+  @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'Bad Request' })
+  @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'Unauthorized' })
+  @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'Forbidden' })
+  @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'Grant not found' })
   @RequirePermission('grants', 'update')
   async update(
     @Param('id') id: string,
@@ -66,7 +94,19 @@ export class GrantsController {
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a grant assignment' })
-  @ApiResponse({ status: HttpStatus.NO_CONTENT })
+  @ApiParam({
+    name: 'id',
+    description: 'Grant ID (UUID)',
+    type: String,
+    format: 'uuid',
+  })
+  @ApiResponse({
+    status: HttpStatus.NO_CONTENT,
+    description: 'Grant deleted successfully',
+  })
+  @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'Unauthorized' })
+  @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'Forbidden' })
+  @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'Grant not found' })
   @RequirePermission('grants', 'delete')
   async remove(@Param('id') id: string): Promise<void> {
     await this.grantsService.remove(id);
