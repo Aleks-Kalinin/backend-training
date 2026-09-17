@@ -261,7 +261,10 @@ export class ConversionService implements OnModuleDestroy {
         status: FILE_CONVERSION_STATUS.ERROR,
         fileSize,
         startTime,
-        errorCode: normalizedError instanceof HttpException ? normalizedError.getStatus() : 500,
+        errorCode:
+          normalizedError instanceof HttpException
+            ? normalizedError.getStatus()
+            : 500,
         userId,
         fileId: createdFileId,
       });

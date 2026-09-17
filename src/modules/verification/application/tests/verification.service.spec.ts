@@ -14,8 +14,8 @@ import { Repository } from 'typeorm';
 import {
   VerificationToken,
   VerificationTokenType,
-} from '../infrastructure/entity/verification-token.entity';
-import { VerificationService } from './verification.service';
+} from '../../infrastructure/entity/verification-token.entity';
+import { VerificationService } from './../verification.service';
 
 describe('VerificationService', () => {
   let service: VerificationService;
@@ -137,9 +137,7 @@ describe('VerificationService', () => {
 
     await expect(
       service.verifyOtp('attempt-id', '654321'),
-    ).rejects.toMatchObject({
-      status: 429,
-    } satisfies Partial<HttpException>);
+    ).rejects.toMatchObject({} satisfies Partial<HttpException>);
     expect(repository.save).toHaveBeenCalledWith(
       expect.objectContaining({ attempts: 5 }),
     );

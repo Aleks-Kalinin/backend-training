@@ -97,7 +97,7 @@ export class SettingsService {
   }
 
   private parseBoolean(value: unknown, fallback: boolean): boolean {
-    if (!value) {
+    if (value === undefined || value === null) {
       return fallback;
     }
 

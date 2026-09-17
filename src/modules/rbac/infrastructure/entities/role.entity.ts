@@ -13,5 +13,5 @@ export class Role {
   description!: string;
 
   @OneToMany(() => Grant, (grant) => grant.role)
-  grants!: Grant[];
+  grants!: Grant[] | undefined;
 }

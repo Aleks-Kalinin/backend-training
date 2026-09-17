@@ -27,4 +27,9 @@ export class CreateUserDto {
   @ApiProperty()
   @IsBoolean()
   isVerified!: boolean;
+
+  @ApiPropertyOptional({ example: 'http://photo.png' })
+  @IsOptional()
+  @IsString()
+  photo?: string;
 }

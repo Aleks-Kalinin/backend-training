@@ -2,17 +2,19 @@ jest.mock('@nestjs/jwt', () => ({
   JwtService: class JwtService {},
 }));
 
+import { SystemRole } from '@/modules/rbac/domain/system-role.enum';
 import { ConflictException, HttpStatus } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
-import { MailService } from '../../mail/application/mail.service';
-import { SettingsService } from '../../settings/application/settings.service';
-import { SETTING_KEYS } from '../../settings/dto/settings.dto';
-import { UsersService } from '../../users/application/users.service';
-import { UserStatus } from '../../users/domain/user-status.enum';
-import { VerificationService } from '../../verification/application/verification.service';
-import { VerificationTokenType } from '../../verification/infrastructure/entity/verification-token.entity';
-import { AuthService } from './auth.service';
+import { randomUUID } from 'node:crypto';
+import { MailService } from '../../../mail/application/mail.service';
+import { SettingsService } from '../../../settings/application/settings.service';
+import { SETTING_KEYS } from '../../../settings/dto/settings.dto';
+import { UsersService } from '../../../users/application/users.service';
+import { UserStatus } from '../../../users/domain/user-status.enum';
+import { VerificationService } from '../../../verification/application/verification.service';
+import { VerificationTokenType } from '../../../verification/infrastructure/entity/verification-token.entity';
+import { AuthService } from '../auth.service';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -71,6 +73,15 @@ describe('AuthService', () => {
       isVerified: true,
       createdAt: new Date(),
       updatedAt: new Date(),
+      roles: [
+        {
+          id: randomUUID(),
+          name: SystemRole.USER,
+          description: 'User role',
+          grants: [],
+        },
+      ],
+      photo: null,
     });
     jwtService.signAsync.mockResolvedValue('token');
 
@@ -99,6 +110,15 @@ describe('AuthService', () => {
       isVerified: true,
       createdAt: new Date(),
       updatedAt: new Date(),
+      roles: [
+        {
+          id: randomUUID(),
+          name: SystemRole.USER,
+          description: 'User role',
+          grants: [],
+        },
+      ],
+      photo: null,
     });
 
     await expect(
@@ -117,6 +137,15 @@ describe('AuthService', () => {
       isVerified: false,
       createdAt: new Date(),
       updatedAt: new Date(),
+      roles: [
+        {
+          id: randomUUID(),
+          name: SystemRole.USER,
+          description: 'User role',
+          grants: undefined,
+        },
+      ],
+      photo: null,
     });
     verificationService.createVerificationRecord.mockResolvedValue({
       attemptId: 'attempt-id',
