@@ -1,7 +1,6 @@
 import { AuthGuard } from '@/modules/auth/auth.guard';
 import { RequirePermission } from '@/modules/rbac/presentation/decorators/require-permission.decorator';
 import { RbacGuard } from '@/modules/rbac/rbac.guard';
-
 import {
   Body,
   Controller,
@@ -11,19 +10,22 @@ import {
   Patch,
   UseGuards,
 } from '@nestjs/common';
-
 import {
+  ApiBearerAuth,
   ApiForbiddenResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-
 import { SettingsService } from '../application/settings.service';
-import { UpdateVerificationSettingsDto } from '../dto/settings.dto';
+import {
+  UpdateVerificationSettingsDto,
+  VerificationSettingsResponseDto,
+} from '../dto/settings.dto';
 
 @ApiTags('Admin Settings')
+@ApiBearerAuth()
 @Controller('admin/settings')
 @UseGuards(AuthGuard, RbacGuard)
 export class SettingsController {
@@ -38,6 +40,7 @@ export class SettingsController {
   })
   @ApiOkResponse({
     description: 'Verification settings retrieved successfully.',
+    type: VerificationSettingsResponseDto,
   })
   @ApiUnauthorizedResponse({
     description: 'User is not authenticated.',
@@ -59,6 +62,7 @@ export class SettingsController {
   })
   @ApiOkResponse({
     description: 'Verification settings updated successfully.',
+    type: VerificationSettingsResponseDto,
   })
   @ApiUnauthorizedResponse({
     description: 'User is not authenticated.',

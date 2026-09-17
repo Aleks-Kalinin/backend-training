@@ -1,6 +1,7 @@
+import { ConfigService } from '@/core/config/config.service';
 import compression from '@fastify/compress';
 import fastifyCookie from '@fastify/cookie';
-import multipart from '@fastify/multipart';
+import fastifyMultipart from '@fastify/multipart';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import {
@@ -12,9 +13,8 @@ import {
   initializeTransactionalContext,
   StorageDriver,
 } from 'typeorm-transactional';
-
-import { ConfigService } from '@/core/config/config.service';
 import { AppModule } from './core/app/app.module';
+import { GLOBAL_MAX_FILE_SIZE } from './modules/conversion/application/constants/file-size-limit';
 
 async function bootstrap() {
   initializeTransactionalContext({ storageDriver: StorageDriver.AUTO });
@@ -48,15 +48,31 @@ async function bootstrap() {
     secret: configService.get('COOKIE_SECRET'),
   });
 
+  await app.register(fastifyMultipart, {
+    limits: {
+      fileSize: GLOBAL_MAX_FILE_SIZE ?? 1024 * 1024,
+    },
+  });
+
   await app.register(compression);
 
-  await app.register(multipart);
-
   const config = new DocumentBuilder()
-    .setTitle('My API')
-    .setDescription('API documentation')
-    .setVersion('1.0')
-    .addBearerAuth()
+    .setTitle('Backend Training API')
+    .setDescription(
+      'REST API documentation for Backend Training project including Authentication, RBAC, Users Management, Settings, Health, and File Conversion services.',
+    )
+    .setVersion('1.0.0')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        name: 'Authorization',
+        description: 'Enter JWT access token',
+        in: 'header',
+      },
+      'bearer',
+    )
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

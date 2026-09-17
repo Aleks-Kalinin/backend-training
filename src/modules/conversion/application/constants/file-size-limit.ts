@@ -1,5 +1,5 @@
-import { TextFileFormat } from '../../domain/text-file-format.enum';
 import { ImageFileFormat } from '../../domain/image-file-format.enum';
+import { TextFileFormat } from '../../domain/text-file-format.enum';
 
 const MB = 1024 * 1024;
 
@@ -17,3 +17,7 @@ export const FILE_SIZE_LIMITS: Record<
   [ImageFileFormat.PNG]: 5 * MB,
   [ImageFileFormat.SVG]: 5 * MB,
 };
+
+export const GLOBAL_MAX_FILE_SIZE = Math.max(
+  ...Object.values(FILE_SIZE_LIMITS),
+);

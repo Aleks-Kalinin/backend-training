@@ -5,6 +5,7 @@ jest.mock('@nestjs/jwt', () => ({
 import { ConflictException, HttpStatus } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
+import { MailService } from '../../mail/application/mail.service';
 import { SettingsService } from '../../settings/application/settings.service';
 import { SETTING_KEYS } from '../../settings/dto/settings.dto';
 import { UsersService } from '../../users/application/users.service';
@@ -19,6 +20,7 @@ describe('AuthService', () => {
   let settingsService: jest.Mocked<SettingsService>;
   let verificationService: jest.Mocked<VerificationService>;
   let jwtService: jest.Mocked<JwtService>;
+  let mailService: jest.Mocked<MailService>;
 
   beforeEach(async () => {
     usersService = {
@@ -40,6 +42,10 @@ describe('AuthService', () => {
       signAsync: jest.fn(),
     } as unknown as jest.Mocked<JwtService>;
 
+    mailService = {
+      sendVerificationOtp: jest.fn(),
+    } as unknown as jest.Mocked<MailService>;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
@@ -47,6 +53,7 @@ describe('AuthService', () => {
         { provide: JwtService, useValue: jwtService },
         { provide: VerificationService, useValue: verificationService },
         { provide: SettingsService, useValue: settingsService },
+        { provide: MailService, useValue: mailService },
       ],
     }).compile();
 

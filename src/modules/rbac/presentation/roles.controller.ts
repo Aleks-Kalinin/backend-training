@@ -11,7 +11,13 @@ import {
   Put,
   UseGuards,
 } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiParam,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { RolesService } from '../application/roles.service';
 import { CreateRoleDto } from '../dto/create-role.dto';
 import { RoleResponseDto } from '../dto/role-response.dto';
@@ -20,6 +26,7 @@ import { RbacGuard } from '../rbac.guard';
 import { RequirePermission } from './decorators/require-permission.decorator';
 
 @ApiTags('Admin RBAC - Roles')
+@ApiBearerAuth()
 @Controller('admin/rbac/roles')
 @UseGuards(AuthGuard, RbacGuard)
 export class RolesController {
@@ -27,7 +34,13 @@ export class RolesController {
 
   @Get()
   @ApiOperation({ summary: 'Get all roles' })
-  @ApiResponse({ status: HttpStatus.OK, type: [RoleResponseDto] })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    type: [RoleResponseDto],
+    description: 'Roles retrieved successfully',
+  })
+  @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'Unauthorized' })
+  @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'Forbidden' })
   @RequirePermission('roles', 'read')
   async findAll(): Promise<RoleResponseDto[]> {
     const roles = await this.rolesService.findAll();
@@ -36,7 +49,14 @@ export class RolesController {
 
   @Post()
   @ApiOperation({ summary: 'Create a new role' })
-  @ApiResponse({ status: HttpStatus.CREATED, type: RoleResponseDto })
+  @ApiResponse({
+    status: HttpStatus.CREATED,
+    type: RoleResponseDto,
+    description: 'Role created successfully',
+  })
+  @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'Bad Request' })
+  @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'Unauthorized' })
+  @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'Forbidden' })
   @RequirePermission('roles', 'create')
   async create(@Body() createRoleDto: CreateRoleDto): Promise<RoleResponseDto> {
     const role = await this.rolesService.create(createRoleDto);
@@ -45,7 +65,21 @@ export class RolesController {
 
   @Put(':id')
   @ApiOperation({ summary: 'Update an existing role' })
-  @ApiResponse({ status: HttpStatus.OK, type: RoleResponseDto })
+  @ApiParam({
+    name: 'id',
+    description: 'Role ID (UUID)',
+    type: String,
+    format: 'uuid',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    type: RoleResponseDto,
+    description: 'Role updated successfully',
+  })
+  @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'Bad Request' })
+  @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'Unauthorized' })
+  @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'Forbidden' })
+  @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'Role not found' })
   @RequirePermission('roles', 'update')
   async update(
     @Param('id') id: string,
@@ -58,7 +92,19 @@ export class RolesController {
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a role' })
-  @ApiResponse({ status: HttpStatus.NO_CONTENT })
+  @ApiParam({
+    name: 'id',
+    description: 'Role ID (UUID)',
+    type: String,
+    format: 'uuid',
+  })
+  @ApiResponse({
+    status: HttpStatus.NO_CONTENT,
+    description: 'Role deleted successfully',
+  })
+  @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'Unauthorized' })
+  @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'Forbidden' })
+  @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'Role not found' })
   @RequirePermission('roles', 'delete')
   async remove(@Param('id') id: string): Promise<void> {
     await this.rolesService.remove(id);

@@ -1,21 +1,21 @@
+import { BadRequestException } from '@nestjs/common';
+import { isString } from 'class-validator';
 import { parse as parseCsv } from 'csv-parse/sync';
 import { stringify as stringifyCsv } from 'csv-stringify/sync';
-import { XMLParser } from 'fast-xml-parser';
 import XMLBuilder from 'fast-xml-builder';
-import yaml from 'yaml';
-import { BadRequestException } from '@nestjs/common';
+import { XMLParser } from 'fast-xml-parser';
+import DOMPurify from 'isomorphic-dompurify';
 import sharp from 'sharp';
-import { ImageFileFormat } from '../../domain/image-file-format.enum';
-import { ImageConversionOptions } from '../../domain/image-conversion-options';
+import yaml from 'yaml';
 import {
+  IMAGE_CONVERSION_MAX_QUALITY,
   IMAGE_CONVERSION_MAX_SIZE,
   IMAGE_CONVERSION_MIN_QUALITY,
-  IMAGE_CONVERSION_MAX_QUALITY,
   IMAGE_CONVERSION_MIN_SIZE,
 } from '../../application/constants/image-conversion-restrictions';
-import { isString } from 'class-validator';
-import DOMPurify from 'isomorphic-dompurify';
 import { MAX_PIXEL_LIMIT } from '../../application/constants/max-pixel-limit';
+import { ImageConversionOptions } from '../../domain/image-conversion-options';
+import { ImageFileFormat } from '../../domain/image-file-format.enum';
 
 export interface TextTaskData {
   buffer: Uint8Array;

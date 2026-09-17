@@ -1,4 +1,3 @@
-import { UserResponseDto } from '@/modules/users/dto/user-response.dto';
 import {
   Body,
   Controller,
@@ -8,13 +7,13 @@ import {
   Res,
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import type { FastifyReply } from 'fastify';
 import { AuthService } from '../application/auth.service';
 import { AuthResponseDto } from '../dto/auth-response.dto';
 import { SignInDto } from '../dto/sign-in.dto';
 import { SignUpDto } from '../dto/sign-up.dto';
 import { VerifyRegistrationDto } from '../dto/verify-registration.dto';
-import { Throttle } from '@nestjs/throttler';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -28,6 +27,10 @@ export class AuthController {
     status: 200,
     description: 'Successfully authenticated',
     type: AuthResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - invalid input format',
   })
   @ApiResponse({
     status: 401,
@@ -49,6 +52,18 @@ export class AuthController {
     description: 'User successfully registered',
     type: AuthResponseDto,
   })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - invalid input data',
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Conflict - user already exists with this email',
+  })
+  @ApiResponse({
+    status: 429,
+    description: 'Too many requests',
+  })
   async signUp(
     @Body() signUpDto: SignUpDto,
     @Res({ passthrough: true }) reply: FastifyReply,
@@ -68,6 +83,10 @@ export class AuthController {
     status: 200,
     description: 'Email verified and user authenticated',
     type: AuthResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - invalid input data',
   })
   @ApiResponse({
     status: 422,

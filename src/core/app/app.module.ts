@@ -14,9 +14,9 @@ import { ThrottlerGuard } from '@nestjs/throttler';
  *
  */
 import { AuthModule } from '@/modules/auth/auth.module';
+import { ConversionModule } from '@/modules/conversion/conversion.module';
 import { RbacModule } from '@/modules/rbac/rbac.module';
 import { UsersModule } from '@/modules/users/users.module';
-import { ConversionModule } from '@/modules/conversion/conversion.module';
 import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
