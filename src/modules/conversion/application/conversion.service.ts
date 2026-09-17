@@ -8,6 +8,7 @@ import {
   RequestTimeoutException,
   StreamableFile,
   UnsupportedMediaTypeException,
+  HttpException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FastifyRequest } from 'fastify';
@@ -38,7 +39,7 @@ interface LogHistoryParams {
   status: FILE_CONVERSION_STATUS;
   fileSize: number;
   startTime: number;
-  errorCode?: string | null;
+  errorCode?: number | null;
   userId: UUID;
   fileId: UUID | null;
 }
@@ -260,7 +261,7 @@ export class ConversionService implements OnModuleDestroy {
         status: FILE_CONVERSION_STATUS.ERROR,
         fileSize,
         startTime,
-        errorCode: normalizedError.constructor.name || 'UNKNOWN_ERROR',
+        errorCode: normalizedError instanceof HttpException ? normalizedError.getStatus() : 500,
         userId,
         fileId: createdFileId,
       });

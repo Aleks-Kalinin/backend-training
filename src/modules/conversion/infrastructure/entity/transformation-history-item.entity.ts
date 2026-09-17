@@ -34,8 +34,8 @@ export class TransformationHistoryItemEntity {
   @Column({ type: 'integer' })
   durationMs!: number;
 
-  @Column({ type: 'varchar', length: 255, nullable: true })
-  errorCode!: string | null;
+  @Column({ type: 'integer', nullable: true })
+  errorCode!: number | null;
 
   @Index()
   @CreateDateColumn({
