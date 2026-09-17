@@ -3,12 +3,12 @@ import {
   CreateDateColumn,
   Entity,
   Index,
+  JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
-  JoinColumn,
 } from 'typeorm';
-import { FILE_TYPE } from '../../application/constants/file-type';
 import { FILE_CONVERSION_STATUS } from '../../application/constants/file-conversion-status';
+import { FILE_TYPE } from '../../application/constants/file-type';
 import { ConvertedFileEntity } from './converted-file.entity';
 
 @Entity('file_conversion_history')

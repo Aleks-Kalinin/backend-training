@@ -2,11 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User } from '../../infrastructure/entity/user.entity';
 import {
-  UserDeletionJob,
   DeletionJobStatus,
+  UserDeletionJob,
 } from '../../infrastructure/entity/user-deletion-job.entity';
+import { User } from '../../infrastructure/entity/user.entity';
 
 export interface UserDeletionEventPayload {
   jobId: string;

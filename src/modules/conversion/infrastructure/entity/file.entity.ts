@@ -1,5 +1,5 @@
-import { TextFileFormat } from '../../domain/text-file-format.enum';
 import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { TextFileFormat } from '../../domain/text-file-format.enum';
 
 @Entity('file')
 export class File {

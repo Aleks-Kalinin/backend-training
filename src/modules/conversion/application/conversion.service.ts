@@ -2,12 +2,12 @@ import { type MultipartFile } from '@fastify/multipart';
 import {
   BadRequestException,
   Injectable,
+  NotFoundException,
   OnModuleDestroy,
   PayloadTooLargeException,
   RequestTimeoutException,
-  UnsupportedMediaTypeException,
-  NotFoundException,
   StreamableFile,
+  UnsupportedMediaTypeException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FastifyRequest } from 'fastify';
@@ -21,6 +21,7 @@ import { Repository } from 'typeorm';
 import { ImageConversionOptions } from '../domain/image-conversion-options';
 import { ImageFileFormat } from '../domain/image-file-format.enum';
 import { TextFileFormat } from '../domain/text-file-format.enum';
+import { ConvertedFileEntity } from '../infrastructure/entity/converted-file.entity';
 import { TransformationHistoryItemEntity } from '../infrastructure/entity/transformation-history-item.entity';
 import { FILE_CONVERSION_STATUS } from './constants/file-conversion-status';
 import { FILE_SIZE_LIMITS } from './constants/file-size-limit';
@@ -29,7 +30,6 @@ import {
   detectImageFormat,
   detectTextFormat,
 } from './constants/mime-to-format.map';
-import { ConvertedFileEntity } from '../infrastructure/entity/converted-file.entity';
 
 interface LogHistoryParams {
   type: FILE_TYPE;

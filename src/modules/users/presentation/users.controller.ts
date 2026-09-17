@@ -25,18 +25,18 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { type UUID } from 'node:crypto';
 import { UserMapper } from '../application/mappers/user.mapper';
 import { UsersService } from '../application/users.service';
+import { ConfirmEmailChangeDto } from '../dto/confirm-email-change.dto';
 import { CreateUserDto } from '../dto/create-user.dto';
+import { DeleteUserResponseDto } from '../dto/delete-user-response.dto';
+import { DeleteUserDto } from '../dto/delete-user.dto';
 import { GetUsersQueryDto } from '../dto/get-users-query.dto';
+import { InitiateEmailChangeDto } from '../dto/initiate-email-change.dto';
 import { UpdateUserDto } from '../dto/update-user.dto';
 import { UserResponseDto } from '../dto/user-response.dto';
-import { InitiateEmailChangeDto } from '../dto/initiate-email-change.dto';
-import { ConfirmEmailChangeDto } from '../dto/confirm-email-change.dto';
-import { DeleteUserDto } from '../dto/delete-user.dto';
-import { DeleteUserResponseDto } from '../dto/delete-user-response.dto';
-import { Throttle } from '@nestjs/throttler';
 
 @ApiTags('Users')
 @ApiBearerAuth()

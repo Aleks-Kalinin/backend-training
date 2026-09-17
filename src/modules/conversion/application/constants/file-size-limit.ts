@@ -1,5 +1,5 @@
-import { TextFileFormat } from '../../domain/text-file-format.enum';
 import { ImageFileFormat } from '../../domain/image-file-format.enum';
+import { TextFileFormat } from '../../domain/text-file-format.enum';
 
 const MB = 1024 * 1024;
 

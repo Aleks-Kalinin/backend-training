@@ -1,3 +1,4 @@
+import { ConfigService } from '@/core/config/config.service';
 import compression from '@fastify/compress';
 import fastifyCookie from '@fastify/cookie';
 import fastifyMultipart from '@fastify/multipart';
@@ -12,7 +13,6 @@ import {
   initializeTransactionalContext,
   StorageDriver,
 } from 'typeorm-transactional';
-import { ConfigService } from '@/core/config/config.service';
 import { AppModule } from './core/app/app.module';
 import { GLOBAL_MAX_FILE_SIZE } from './modules/conversion/application/constants/file-size-limit';
 

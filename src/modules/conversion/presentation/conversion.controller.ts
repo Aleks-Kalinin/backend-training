@@ -1,14 +1,18 @@
+import { AuthGuard } from '@/modules/auth/auth.guard';
+import { type AuthenticatedRequest } from '@/modules/auth/dto/auth-request.dto';
+import { AllowSelf } from '@/modules/rbac/presentation/decorators/allow-self.decorator';
+import { RequirePermission } from '@/modules/rbac/presentation/decorators/require-permission.decorator';
+import { RbacGuard } from '@/modules/rbac/rbac.guard';
 import {
   Controller,
   Get,
+  Param,
   Post,
   Req,
   Res,
-  UseGuards,
   UnauthorizedException,
-  Param,
+  UseGuards,
 } from '@nestjs/common';
-import { ConversionService } from '../application/conversion.service';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -19,17 +23,13 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import type { FastifyReply } from 'fastify';
-import { RequirePermission } from '@/modules/rbac/presentation/decorators/require-permission.decorator';
-import { RbacGuard } from '@/modules/rbac/rbac.guard';
-import { AuthGuard } from '@/modules/auth/auth.guard';
-import { FILE_TYPE } from '../application/constants/file-type';
-import { AllowSelf } from '@/modules/rbac/presentation/decorators/allow-self.decorator';
-import { type AuthenticatedRequest } from '@/modules/auth/dto/auth-request.dto';
 import { type UUID } from 'node:crypto';
+import { FILE_TYPE } from '../application/constants/file-type';
 import {
   IMAGE_MIME_TYPES,
   TEXT_MIME_TYPES,
 } from '../application/constants/mime-types';
+import { ConversionService } from '../application/conversion.service';
 
 @ApiTags('Files conversion and download')
 @ApiBearerAuth()

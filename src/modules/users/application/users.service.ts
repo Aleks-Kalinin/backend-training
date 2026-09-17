@@ -1,32 +1,32 @@
+import { AuthTokenPayload } from '@/modules/auth/auth.guard';
+import { MailService } from '@/modules/mail/application/mail.service';
+import { SystemRole } from '@/modules/rbac/domain/system-role.enum';
+import { Role } from '@/modules/rbac/infrastructure/entities/role.entity';
+import { VerificationService } from '@/modules/verification/application/verification.service';
+import { VerificationTokenType } from '@/modules/verification/infrastructure/entity/verification-token.entity';
 import {
   ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { CreateUserDto } from '../dto/create-user.dto';
-import { GetUsersQueryDto } from '../dto/get-users-query.dto';
-import { UpdateUserDto } from '../dto/update-user.dto';
-import { User } from '../infrastructure/entity/user.entity';
-import { AuthTokenPayload } from '@/modules/auth/auth.guard';
-import { VerificationService } from '@/modules/verification/application/verification.service';
-import { MailService } from '@/modules/mail/application/mail.service';
 import { UUID } from 'node:crypto';
-import { InitiateEmailChangeDto } from '../dto/initiate-email-change.dto';
-import { VerificationTokenType } from '@/modules/verification/infrastructure/entity/verification-token.entity';
+import { Repository } from 'typeorm';
 import { ConfirmEmailChangeDto } from '../dto/confirm-email-change.dto';
+import { CreateUserDto } from '../dto/create-user.dto';
+import { DeleteUserResponseDto } from '../dto/delete-user-response.dto';
 import { DeleteUserDto } from '../dto/delete-user.dto';
+import { GetUsersQueryDto } from '../dto/get-users-query.dto';
+import { InitiateEmailChangeDto } from '../dto/initiate-email-change.dto';
+import { UpdateUserDto } from '../dto/update-user.dto';
 import {
   DeletionExecutionMode,
   DeletionJobStatus,
   UserDeletionJob,
 } from '../infrastructure/entity/user-deletion-job.entity';
-import { DeleteUserResponseDto } from '../dto/delete-user-response.dto';
-import { EventEmitter2 } from '@nestjs/event-emitter';
-import { Role } from '@/modules/rbac/infrastructure/entities/role.entity';
-import { SystemRole } from '@/modules/rbac/domain/system-role.enum';
+import { User } from '../infrastructure/entity/user.entity';
 
 @Injectable()
 export class UsersService {

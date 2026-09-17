@@ -5,13 +5,13 @@ jest.mock('@nestjs/jwt', () => ({
 import { ConflictException, HttpStatus } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
+import { MailService } from '../../mail/application/mail.service';
 import { SettingsService } from '../../settings/application/settings.service';
 import { SETTING_KEYS } from '../../settings/dto/settings.dto';
 import { UsersService } from '../../users/application/users.service';
 import { UserStatus } from '../../users/domain/user-status.enum';
 import { VerificationService } from '../../verification/application/verification.service';
 import { VerificationTokenType } from '../../verification/infrastructure/entity/verification-token.entity';
-import { MailService } from '../../mail/application/mail.service';
 import { AuthService } from './auth.service';
 
 describe('AuthService', () => {

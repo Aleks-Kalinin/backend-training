@@ -1,4 +1,3 @@
-import { UserResponseDto } from '@/modules/users/dto/user-response.dto';
 import {
   Body,
   Controller,
@@ -7,19 +6,14 @@ import {
   Post,
   Res,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiResponse,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import type { FastifyReply } from 'fastify';
 import { AuthService } from '../application/auth.service';
 import { AuthResponseDto } from '../dto/auth-response.dto';
 import { SignInDto } from '../dto/sign-in.dto';
 import { SignUpDto } from '../dto/sign-up.dto';
 import { VerifyRegistrationDto } from '../dto/verify-registration.dto';
-import { Throttle } from '@nestjs/throttler';
 
 @ApiTags('Authentication')
 @Controller('auth')
