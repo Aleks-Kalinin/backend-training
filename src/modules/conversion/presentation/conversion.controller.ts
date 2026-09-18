@@ -36,7 +36,7 @@ import { ConversionService } from '../application/conversion.service';
 @Controller()
 @UseGuards(AuthGuard, RbacGuard)
 export class ConversionController {
-  constructor(private readonly conversionService: ConversionService) { }
+  constructor(private readonly conversionService: ConversionService) {}
 
   private setDownloadHeaders(
     reply: FastifyReply,
