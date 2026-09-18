@@ -73,6 +73,18 @@ async function bootstrap() {
       },
       'bearer',
     )
+    .addCookieAuth('access_token', {
+      type: 'apiKey',
+      in: 'cookie',
+      name: 'access_token',
+      description: 'JWT access token (HttpOnly cookie)',
+    })
+    .addCookieAuth('refresh_token', {
+      type: 'apiKey',
+      in: 'cookie',
+      name: 'refresh_token',
+      description: 'JWT refresh token (HttpOnly cookie)',
+    })
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

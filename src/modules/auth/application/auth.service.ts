@@ -1,8 +1,12 @@
+import { ConfigService } from '@/core/config/config.service';
 import {
   ConflictException,
   ForbiddenException,
+  forwardRef,
   HttpStatus,
+  Inject,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -14,26 +18,60 @@ import { UsersService } from '../../users/application/users.service';
 import { UserStatus } from '../../users/domain/user-status.enum';
 import { VerificationService } from '../../verification/application/verification.service';
 import { VerificationTokenType } from '../../verification/infrastructure/entity/verification-token.entity';
+import { TOKEN_TTL } from '../presentation/constants/auth.constants';
 
 export type SignUpResult =
   | {
       statusCode: HttpStatus.CREATED;
-      data: { user: { id: string; email: string }; access_token: string };
+      data: { user: { id: string; email: string } };
+      tokens: TokenPair;
     }
   | {
       statusCode: HttpStatus.ACCEPTED;
       data: { message: string; verificationRequired: true; attemptId: string };
     };
 
+export type TokenPair = {
+  accessToken: string;
+  refreshToken: string;
+};
+
+export type JwtPayload = {
+  sub: string;
+  email: string;
+  roles: string[];
+};
+
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
     private verificationService: VerificationService,
-    private settingsService: SettingsService,
+    @Inject(forwardRef(() => SettingsService))
+    private readonly settingsService: SettingsService,
     private mailService: MailService,
+    private configService: ConfigService,
   ) {}
+
+  /**
+   * Generate an access + refresh token pair for a given user payload.
+   */
+  async generateTokenPair(payload: JwtPayload): Promise<TokenPair> {
+    const [accessToken, refreshToken] = await Promise.all([
+      this.jwtService.signAsync(payload, {
+        expiresIn: TOKEN_TTL.ACCESS_TOKEN_SECONDS,
+      }),
+      this.jwtService.signAsync(payload, {
+        secret: this.configService.get('JWT_REFRESH_SECRET'),
+        expiresIn: TOKEN_TTL.REFRESH_TOKEN_SECONDS,
+      }),
+    ]);
+
+    return { accessToken, refreshToken };
+  }
 
   async signUp(email: string, pass: string): Promise<SignUpResult> {
     const normalizedEmail = email.trim().toLowerCase();
@@ -56,11 +94,16 @@ export class AuthService {
 
     if (!isVerificationRequired) {
       const roleNames = user.roles ? user.roles.map((role) => role.name) : [];
-      const payload = { sub: user.userId, email: user.email, roles: roleNames };
-      const access_token = await this.jwtService.signAsync(payload);
+      const payload: JwtPayload = {
+        sub: user.userId,
+        email: user.email,
+        roles: roleNames,
+      };
+      const tokens = await this.generateTokenPair(payload);
       return {
         statusCode: HttpStatus.CREATED,
-        data: { user: { id: user.userId, email: user.email }, access_token },
+        data: { user: { id: user.userId, email: user.email } },
+        tokens,
       };
     }
 
@@ -85,7 +128,7 @@ export class AuthService {
   async verifyRegistration(
     attemptId: string,
     otp: string,
-  ): Promise<{ access_token: string }> {
+  ): Promise<{ tokens: TokenPair }> {
     const token = await this.verificationService.verifyOtp(attemptId, otp);
 
     // Activate user upon successful verification
@@ -95,13 +138,16 @@ export class AuthService {
     });
 
     const roleNames = user.roles ? user.roles.map((role) => role.name) : [];
-    const payload = { sub: user.userId, email: user.email, roles: roleNames };
-    return {
-      access_token: await this.jwtService.signAsync(payload),
+    const payload: JwtPayload = {
+      sub: user.userId,
+      email: user.email,
+      roles: roleNames,
     };
+    const tokens = await this.generateTokenPair(payload);
+    return { tokens };
   }
 
-  async signIn(email: string, pass: string): Promise<{ access_token: string }> {
+  async signIn(email: string, pass: string): Promise<{ tokens: TokenPair }> {
     const user = await this.usersService.findOne(email.trim().toLowerCase());
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
@@ -112,26 +158,57 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const isLoginVerificationRequired =
-      await this.settingsService.isFeatureEnabled(
-        SETTING_KEYS.LOGIN_VERIFICATION,
-      );
-
     if (!user.isVerified || user.status === UserStatus.PENDING) {
       throw new ForbiddenException(
         'Email address must be verified prior to login',
       );
     }
 
+    if (user.status !== UserStatus.ACTIVE) {
+      throw new ForbiddenException('Account is not active');
+    }
+
+    const isLoginVerificationRequired =
+      await this.settingsService.isFeatureEnabled(
+        SETTING_KEYS.LOGIN_VERIFICATION,
+      );
+
     if (isLoginVerificationRequired) {
       // Generate OTP and send to user via email/SMS
     }
 
     const roleNames = user.roles ? user.roles.map((role) => role.name) : [];
-    const payload = { sub: user.userId, email: user.email, roles: roleNames };
-
-    return {
-      access_token: await this.jwtService.signAsync(payload),
+    const payload: JwtPayload = {
+      sub: user.userId,
+      email: user.email,
+      roles: roleNames,
     };
+
+    const tokens = await this.generateTokenPair(payload);
+    return { tokens };
+  }
+
+  /**
+   * Validates a refresh token and returns a new token pair (rotation).
+   * No database lookup is performed — validation is purely cryptographic.
+   */
+  async refresh(refreshToken: string): Promise<{ tokens: TokenPair }> {
+    try {
+      const payload = await this.jwtService.verifyAsync<JwtPayload>(
+        refreshToken,
+        { secret: this.configService.get('JWT_REFRESH_SECRET') },
+      );
+
+      const tokens = await this.generateTokenPair({
+        sub: payload.sub,
+        email: payload.email,
+        roles: payload.roles,
+      });
+
+      return { tokens };
+    } catch {
+      this.logger.warn('Refresh token validation failed');
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
   }
 }
