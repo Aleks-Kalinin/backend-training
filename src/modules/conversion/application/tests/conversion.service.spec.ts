@@ -118,14 +118,28 @@ describe('ConversionService', () => {
           status: FILE_CONVERSION_STATUS.SUCCESS,
         },
       ] as TransformationHistoryItemEntity[];
+      const mockQueryBuilder = {
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        addOrderBy: jest.fn().mockReturnThis(),
+        take: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue(mockHistory),
+      };
 
-      transformationHistoryRepository.find.mockResolvedValue(mockHistory);
+      transformationHistoryRepository.createQueryBuilder = jest
+        .fn()
+        .mockReturnValue(mockQueryBuilder);
 
-      const result = await service.getHistory(mockUserId, mockTargetId);
-      expect(result).toEqual(mockHistory);
-      expect(transformationHistoryRepository.find).toHaveBeenCalledWith({
-        where: { userId: mockUserId },
-      });
+      const result = await service.getHistory(mockUserId, mockTargetId, {});
+      expect(result).toEqual({ data: mockHistory, nextCursor: null });
+      expect(
+        transformationHistoryRepository.createQueryBuilder,
+      ).toHaveBeenCalledWith('history');
+      expect(mockQueryBuilder.where).toHaveBeenCalledWith(
+        'history.userId = :userId',
+        { userId: mockUserId },
+      );
     });
   });
 

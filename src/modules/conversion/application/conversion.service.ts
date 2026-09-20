@@ -24,6 +24,7 @@ import { Repository } from 'typeorm';
 import { ImageConversionOptions } from '../domain/image-conversion-options';
 import { ImageFileFormat } from '../domain/image-file-format.enum';
 import { TextFileFormat } from '../domain/text-file-format.enum';
+import { GetHistoryQueryDto } from '../dto/get-history-query.dto';
 import { ConvertedFileEntity } from '../infrastructure/entity/converted-file.entity';
 import { TransformationHistoryItemEntity } from '../infrastructure/entity/transformation-history-item.entity';
 import { FILE_CONVERSION_STATUS } from './constants/file-conversion-status';
@@ -33,6 +34,11 @@ import {
   detectImageFormat,
   detectTextFormat,
 } from './constants/mime-to-format.map';
+
+interface CursorPayload {
+  id: string;
+  createdAt: string;
+}
 
 interface createHistoryEntryParams {
   type: FILE_TYPE;
@@ -362,10 +368,64 @@ export class ConversionService implements OnModuleDestroy {
     }
   }
 
-  async getHistory(userId: UUID, targetUserId: UUID) {
-    const res = await this.transformationHistoryRepository.find({
-      where: { userId },
-    });
+  async getHistory(
+    userId: UUID,
+    targetUserId: UUID,
+    query: GetHistoryQueryDto,
+  ) {
+    const {
+      cursor,
+      limit = 20,
+      type,
+      sourceFormat,
+      targetFormat,
+      status,
+      createdAtFrom,
+      createdAtTo,
+    } = query;
+
+    const qb = this.transformationHistoryRepository
+      .createQueryBuilder('history')
+      .where('history.userId = :userId', { userId });
+
+    if (type) qb.andWhere('history.type = :type', { type });
+    if (sourceFormat)
+      qb.andWhere('history.sourceFormat = :sourceFormat', { sourceFormat });
+    if (targetFormat)
+      qb.andWhere('history.targetFormat = :targetFormat', { targetFormat });
+    if (status) qb.andWhere('history.status = :status', { status });
+    if (createdAtFrom)
+      qb.andWhere('history.createdAt >= :createdAtFrom', { createdAtFrom });
+    if (createdAtTo)
+      qb.andWhere('history.createdAt <= :createdAtTo', { createdAtTo });
+
+    if (cursor) {
+      const decodedCursor = this.decodeCursor(cursor);
+      qb.andWhere(
+        '(history.createdAt < :cursorCreatedAt OR (history.createdAt = :cursorCreatedAt AND history.id < :cursorId))',
+        {
+          cursorCreatedAt: decodedCursor.createdAt,
+          cursorId: decodedCursor.id,
+        },
+      );
+    }
+
+    qb.orderBy('history.createdAt', 'DESC')
+      .orderBy('history.id', 'DESC')
+      .take(limit + 1);
+
+    const res = await qb.getMany();
+    let nextCursor: string | null = null;
+    if (res.length > limit) {
+      const nextItem = res.pop();
+      if (res.length > 0) {
+        const lastItem = res[res.length - 1];
+        nextCursor = this.encodeCursor({
+          id: lastItem.id,
+          createdAt: lastItem.createdAt.toISOString(),
+        });
+      }
+    }
     this.logger.log(
       JSON.stringify({
         type: 'GET_HISTORY',
@@ -375,7 +435,30 @@ export class ConversionService implements OnModuleDestroy {
         length: res.length,
       }),
     );
-    return res;
+    return { data: res, nextCursor };
+  }
+
+  private encodeCursor(payload: CursorPayload): string {
+    return Buffer.from(JSON.stringify(payload)).toString('base64');
+  }
+
+  private decodeCursor(cursor: string): CursorPayload {
+    try {
+      const json = Buffer.from(cursor, 'base64').toString('utf-8');
+      const payload = JSON.parse(json);
+
+      if (
+        !payload.id ||
+        !payload.createdAt ||
+        isNaN(Date.parse(payload.createdAt))
+      ) {
+        throw new Error('Invalid cursor keys');
+      }
+
+      return payload;
+    } catch {
+      throw new BadRequestException('Invalid pagination cursor');
+    }
   }
 
   async getFileForDownload(userId: UUID, itemId: UUID) {

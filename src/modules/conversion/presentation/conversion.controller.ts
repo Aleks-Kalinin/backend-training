@@ -8,6 +8,7 @@ import {
   Get,
   Param,
   Post,
+  Query,
   Req,
   Res,
   UnauthorizedException,
@@ -30,6 +31,7 @@ import {
   TEXT_MIME_TYPES,
 } from '../application/constants/mime-types';
 import { ConversionService } from '../application/conversion.service';
+import { GetHistoryQueryDto } from '../dto/get-history-query.dto';
 
 @ApiTags('Files conversion and download')
 @ApiBearerAuth()
@@ -413,14 +415,17 @@ export class ConversionController {
     },
   })
   @AllowSelf('userId')
-  getTransformationHistory(@Req() req: AuthenticatedRequest) {
+  getTransformationHistory(
+    @Req() req: AuthenticatedRequest,
+    @Query() query: GetHistoryQueryDto,
+  ) {
     const userId = req.user?.sub;
 
     if (!userId) {
       throw new Error('User ID is required');
     }
 
-    return this.conversionService.getHistory(userId, userId);
+    return this.conversionService.getHistory(userId, userId, query);
   }
 
   @Get('admin/users/:userId/transformations/history')
@@ -482,9 +487,10 @@ export class ConversionController {
   @RequirePermission('history', 'read')
   getAllTransformationHistory(
     @Param('userId') userId: UUID,
+    @Query() query: GetHistoryQueryDto,
     @Req() req: AuthenticatedRequest,
   ) {
-    return this.conversionService.getHistory(userId, req.user?.sub);
+    return this.conversionService.getHistory(userId, req.user?.sub, query);
   }
 
   @Get('api/transformations/history/:itemId/download')
