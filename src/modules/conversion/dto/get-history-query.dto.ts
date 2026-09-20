@@ -19,7 +19,8 @@ export const ALLOWED_FORMAT = {
   ...TextFileFormat,
 };
 
-export type ALLOWED_FORMAT = keyof typeof ALLOWED_FORMAT;
+export type ALLOWED_FORMAT =
+  (typeof ALLOWED_FORMAT)[keyof typeof ALLOWED_FORMAT];
 
 export class GetHistoryQueryDto {
   @ApiPropertyOptional({
