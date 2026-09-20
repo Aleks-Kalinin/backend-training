@@ -10,6 +10,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Logger,
   NotFoundException,
   Param,
   Patch,
@@ -43,6 +44,8 @@ import { UserResponseDto } from '../dto/user-response.dto';
 @UseGuards(AuthGuard, RbacGuard)
 @Controller()
 export class UsersContoller {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(private readonly usersService: UsersService) {}
 
   @Get('admin/users')
@@ -63,8 +66,11 @@ export class UsersContoller {
   })
   @Throttle({ default: { ttl: 10000, limit: 5 } })
   @RequirePermission('users', 'read')
-  async getUsers(@Query() query: GetUsersQueryDto) {
-    const users = await this.usersService.getUsers(query);
+  async getUsers(
+    @Query() query: GetUsersQueryDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const users = await this.usersService.getUsers(query, req.user.sub);
     return users;
   }
 
@@ -100,10 +106,17 @@ export class UsersContoller {
     const user = await this.usersService.getUser(id);
 
     if (!user) {
+      this.logger.log(
+        JSON.stringify({
+          actorUserId: req.user.sub,
+          targetUserId: id,
+          status: HttpStatus.NOT_FOUND,
+        }),
+      );
       throw new NotFoundException('User not found');
     }
     // Map entity to response DTO based on requester identity
-    return UserMapper.toProfileResponseDto(user, req.user!);
+    return UserMapper.toProfileResponseDto(user, req.user);
   }
 
   @Post('users')
@@ -178,7 +191,7 @@ export class UsersContoller {
       req.user,
     );
 
-    return UserMapper.toProfileResponseDto(updatedUser, req.user!);
+    return UserMapper.toProfileResponseDto(updatedUser, req.user);
   }
 
   @Post('users/:id/email-change')
@@ -220,7 +233,7 @@ export class UsersContoller {
     @Body() emailChangeDto: InitiateEmailChangeDto,
     @Req() req: AuthenticatedRequest,
   ) {
-    return this.usersService.initiateEmailChange(id, emailChangeDto, req.user!);
+    return this.usersService.initiateEmailChange(id, emailChangeDto, req.user);
   }
 
   @Post('users/:id/email-change/confirm')
@@ -267,7 +280,7 @@ export class UsersContoller {
     @Body() confirmDto: ConfirmEmailChangeDto,
     @Req() req: AuthenticatedRequest,
   ) {
-    return this.usersService.confirmEmailChange(id, confirmDto, req.user!);
+    return this.usersService.confirmEmailChange(id, confirmDto, req.user);
   }
 
   @Delete('users/:id')

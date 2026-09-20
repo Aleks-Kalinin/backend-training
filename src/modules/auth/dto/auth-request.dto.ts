@@ -8,5 +8,5 @@ export type AuthTokenPayload = {
 };
 
 export type AuthenticatedRequest = FastifyRequest & {
-  user?: AuthTokenPayload;
+  user: AuthTokenPayload;
 };

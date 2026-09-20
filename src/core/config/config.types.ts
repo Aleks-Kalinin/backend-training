@@ -8,6 +8,12 @@ export interface Config {
   COOKIE_SECRET: string;
 
   /**
+   * JWT secrets
+   */
+  JWT_SECRET: string;
+  JWT_REFRESH_SECRET: string;
+
+  /**
    * Health check options
    */
   HEALTH_CHECK_ENABLED?: boolean;

@@ -14,6 +14,7 @@ import { UsersService } from '../../../users/application/users.service';
 import { UserStatus } from '../../../users/domain/user-status.enum';
 import { VerificationService } from '../../../verification/application/verification.service';
 import { VerificationTokenType } from '../../../verification/infrastructure/entity/verification-token.entity';
+import { ConfigService } from '@/core/config/config.service';
 import { AuthService } from '../auth.service';
 
 describe('AuthService', () => {
@@ -48,6 +49,10 @@ describe('AuthService', () => {
       sendVerificationOtp: jest.fn(),
     } as unknown as jest.Mocked<MailService>;
 
+    const configService = {
+      get: jest.fn().mockReturnValue('test-secret'),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
@@ -56,6 +61,7 @@ describe('AuthService', () => {
         { provide: VerificationService, useValue: verificationService },
         { provide: SettingsService, useValue: settingsService },
         { provide: MailService, useValue: mailService },
+        { provide: ConfigService, useValue: configService },
       ],
     }).compile();
 

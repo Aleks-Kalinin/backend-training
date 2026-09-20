@@ -1,14 +1,16 @@
 import { type MultipartFile } from '@fastify/multipart';
 import {
   BadRequestException,
+  HttpException,
+  HttpStatus,
   Injectable,
+  Logger,
   NotFoundException,
   OnModuleDestroy,
   PayloadTooLargeException,
   RequestTimeoutException,
   StreamableFile,
   UnsupportedMediaTypeException,
-  HttpException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FastifyRequest } from 'fastify';
@@ -32,7 +34,7 @@ import {
   detectTextFormat,
 } from './constants/mime-to-format.map';
 
-interface LogHistoryParams {
+interface createHistoryEntryParams {
   type: FILE_TYPE;
   sourceFormat: string;
   targetFormat: string;
@@ -47,6 +49,7 @@ interface LogHistoryParams {
 @Injectable()
 export class ConversionService implements OnModuleDestroy {
   private piscina: Piscina;
+  private logger = new Logger(ConversionService.name);
   constructor(
     @InjectRepository(TransformationHistoryItemEntity)
     private readonly transformationHistoryRepository: Repository<TransformationHistoryItemEntity>,
@@ -60,6 +63,25 @@ export class ConversionService implements OnModuleDestroy {
       ),
       maxThreads: Math.max(1, Math.floor(os.cpus().length / 2)),
     });
+  }
+
+  private logConversionProcess(
+    actorUserId: UUID,
+    targetFormat: string,
+    sourceFormat: string,
+    fileSize: number,
+    status: HttpStatus,
+  ) {
+    this.logger.log(
+      JSON.stringify({
+        event: 'CONVERT_FILE',
+        actorUserId,
+        targetFormat,
+        sourceFormat,
+        fileSize,
+        status,
+      }),
+    );
   }
 
   async onModuleDestroy() {
@@ -140,13 +162,46 @@ export class ConversionService implements OnModuleDestroy {
       }
 
       if (streamError) throw streamError;
-      if (!rawFilePart || !fileBuffer)
+      if (!rawFilePart || !fileBuffer) {
+        this.logConversionProcess(
+          userId,
+          targetFormat ?? '',
+          sourceFormat ?? '',
+          fileSize,
+          HttpStatus.BAD_REQUEST,
+        );
         throw new BadRequestException('File is required');
-      if (!targetFormat)
+      }
+      if (!targetFormat) {
+        this.logConversionProcess(
+          userId,
+          targetFormat ?? '',
+          sourceFormat ?? '',
+          fileSize,
+          HttpStatus.BAD_REQUEST,
+        );
         throw new BadRequestException('targetFormat field is required');
-      if (fileSize === 0) throw new BadRequestException('File is empty');
-      if (!sourceFormat)
+      }
+      if (fileSize === 0) {
+        this.logConversionProcess(
+          userId,
+          targetFormat,
+          sourceFormat ?? '',
+          fileSize,
+          HttpStatus.BAD_REQUEST,
+        );
+        throw new BadRequestException('File is empty');
+      }
+      if (!sourceFormat) {
+        this.logConversionProcess(
+          userId,
+          targetFormat,
+          sourceFormat ?? '',
+          fileSize,
+          HttpStatus.BAD_REQUEST,
+        );
         throw new UnsupportedMediaTypeException('Unsupported source format');
+      }
 
       const isValidTarget =
         fileType === FILE_TYPE.IMAGE
@@ -158,12 +213,26 @@ export class ConversionService implements OnModuleDestroy {
             );
 
       if (!isValidTarget) {
+        this.logConversionProcess(
+          userId,
+          targetFormat,
+          sourceFormat,
+          fileSize,
+          HttpStatus.BAD_REQUEST,
+        );
         throw new UnsupportedMediaTypeException('Invalid target format');
       }
 
       // 3. Size Limit Enforcement
       const fileSizeLimit = FILE_SIZE_LIMITS[targetFormat];
       if (fileSizeLimit && fileSize > fileSizeLimit) {
+        this.logConversionProcess(
+          userId,
+          targetFormat,
+          sourceFormat,
+          fileSize,
+          HttpStatus.PAYLOAD_TOO_LARGE,
+        );
         throw new PayloadTooLargeException(
           'File size exceeds target format limit',
         );
@@ -171,7 +240,7 @@ export class ConversionService implements OnModuleDestroy {
 
       // 4. Identity Conversion Guard
       if (sourceFormat === targetFormat) {
-        await this.logHistory({
+        await this.createHistoryEntry({
           type: fileType,
           sourceFormat,
           targetFormat,
@@ -213,10 +282,19 @@ export class ConversionService implements OnModuleDestroy {
           filePath: savedFilePath,
         });
         createdFileId = fileRecord.id;
+        this.logger.log(
+          JSON.stringify({
+            type: 'SAVE',
+            userId,
+            targetFormat,
+            fileId: createdFileId,
+            HttpStatus: HttpStatus.OK,
+          }),
+        );
       }
 
       // 6. Record Success
-      await this.logHistory({
+      await this.createHistoryEntry({
         type: fileType,
         sourceFormat,
         targetFormat,
@@ -254,7 +332,7 @@ export class ConversionService implements OnModuleDestroy {
       }
 
       // Always records DB log, capturing fileSize (if read) and fallback values
-      await this.logHistory({
+      await this.createHistoryEntry({
         type: fileType,
         sourceFormat: sourceFormat ?? 'UNKNOWN',
         targetFormat: targetFormat ?? 'UNKNOWN',
@@ -269,14 +347,35 @@ export class ConversionService implements OnModuleDestroy {
         fileId: createdFileId,
       });
 
+      this.logConversionProcess(
+        userId,
+        targetFormat ?? '',
+        sourceFormat ?? '',
+        fileSize,
+        normalizedError instanceof HttpException
+          ? normalizedError.getStatus()
+          : 500,
+      );
       throw normalizedError;
     } finally {
       clearTimeout(timeoutId);
     }
   }
 
-  async getHistory(userId: UUID) {
-    return this.transformationHistoryRepository.find({ where: { userId } });
+  async getHistory(userId: UUID, targetUserId: UUID) {
+    const res = await this.transformationHistoryRepository.find({
+      where: { userId },
+    });
+    this.logger.log(
+      JSON.stringify({
+        type: 'GET_HISTORY',
+        userId,
+        targetUserId,
+        HttpStatus: HttpStatus.OK,
+        length: res.length,
+      }),
+    );
+    return res;
   }
 
   async getFileForDownload(userId: UUID, itemId: UUID) {
@@ -286,6 +385,7 @@ export class ConversionService implements OnModuleDestroy {
     });
 
     if (!historyItem || !historyItem.file) {
+      this.logger.log(`No file found for user ${userId} and item ${itemId}`);
       throw new NotFoundException(
         'Transformation record or associated file not found',
       );
@@ -293,17 +393,30 @@ export class ConversionService implements OnModuleDestroy {
 
     const filePath = historyItem.file.filePath;
     if (!existsSync(filePath)) {
+      this.logger.log(`File not found for user ${userId} and item ${itemId}`);
       throw new NotFoundException('Physical file no longer exists on disk');
     }
 
     const stream = createReadStream(filePath);
-    return {
+    const result: { stream: StreamableFile; targetFormat: string } = {
       stream: new StreamableFile(stream),
       targetFormat: historyItem.targetFormat,
     };
+
+    this.logger.log(
+      JSON.stringify({
+        type: 'DOWNLOAD',
+        userId,
+        itemId,
+        targetFormat: historyItem.targetFormat,
+        HttpStatus: HttpStatus.OK,
+      }),
+    );
+
+    return result;
   }
 
-  private async logHistory({
+  private async createHistoryEntry({
     type,
     sourceFormat,
     targetFormat,
@@ -313,7 +426,7 @@ export class ConversionService implements OnModuleDestroy {
     errorCode,
     userId,
     fileId,
-  }: LogHistoryParams) {
+  }: createHistoryEntryParams) {
     const durationMs = Math.round(performance.now() - startTime);
 
     try {
@@ -330,7 +443,7 @@ export class ConversionService implements OnModuleDestroy {
         fileId,
       });
     } catch (dbError) {
-      console.error('Failed to log transformation history:', dbError);
+      this.logger.error('Failed to log transformation history:', dbError);
     }
   }
 }

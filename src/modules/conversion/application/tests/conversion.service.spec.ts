@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Logger,
   NotFoundException,
   PayloadTooLargeException,
   RequestTimeoutException,
@@ -54,6 +55,7 @@ describe('ConversionService', () => {
   const mockUserId = randomUUID();
   const mockFileId = randomUUID();
   const mockItemId = randomUUID();
+  const mockTargetId = randomUUID();
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -119,7 +121,7 @@ describe('ConversionService', () => {
 
       transformationHistoryRepository.find.mockResolvedValue(mockHistory);
 
-      const result = await service.getHistory(mockUserId);
+      const result = await service.getHistory(mockUserId, mockTargetId);
       expect(result).toEqual(mockHistory);
       expect(transformationHistoryRepository.find).toHaveBeenCalledWith({
         where: { userId: mockUserId },
@@ -676,9 +678,10 @@ describe('ConversionService', () => {
     });
 
     it('silently catches database errors inside logHistory', async () => {
-      const consoleSpy = jest
-        .spyOn(console, 'error')
+      const loggerSpy = jest
+        .spyOn(Logger.prototype, 'error')
         .mockImplementation(() => {});
+
       transformationHistoryRepository.save.mockRejectedValue(
         new Error('DB connection failed'),
       );
@@ -708,11 +711,12 @@ describe('ConversionService', () => {
       );
 
       expect(result.targetFormat).toBe(ImageFileFormat.PNG);
-      expect(consoleSpy).toHaveBeenCalledWith(
+      expect(loggerSpy).toHaveBeenCalledWith(
         'Failed to log transformation history:',
         expect.any(Error),
       );
-      consoleSpy.mockRestore();
+
+      loggerSpy.mockRestore();
     });
   });
 });

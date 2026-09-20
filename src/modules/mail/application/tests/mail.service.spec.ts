@@ -1,4 +1,4 @@
-import { InternalServerErrorException } from '@nestjs/common';
+import { InternalServerErrorException, Logger } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import * as nodemailer from 'nodemailer';
 import { MailService } from './../mail.service';
@@ -135,9 +135,10 @@ describe('MailService', () => {
     });
 
     it('logs error and throws InternalServerErrorException when sendMail fails', async () => {
-      const consoleSpy = jest
-        .spyOn(console, 'error')
+      const loggerSpy = jest
+        .spyOn(Logger.prototype, 'error')
         .mockImplementation(() => {});
+
       mockSendMail.mockRejectedValueOnce(new Error('SMTP dispatch error'));
 
       await expect(
@@ -148,12 +149,11 @@ describe('MailService', () => {
         ),
       );
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        'Error sending verification email:',
-        expect.any(Error),
+      expect(loggerSpy).toHaveBeenCalledWith(
+        'Failed to dispatch verification email: Error: SMTP dispatch error',
       );
 
-      consoleSpy.mockRestore();
+      loggerSpy.mockRestore();
     });
   });
 });

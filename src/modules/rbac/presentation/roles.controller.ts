@@ -1,4 +1,5 @@
 import { AuthGuard } from '@/modules/auth/auth.guard';
+import { type AuthenticatedRequest } from '@/modules/auth/dto/auth-request.dto';
 import {
   Body,
   Controller,
@@ -9,6 +10,7 @@ import {
   Param,
   Post,
   Put,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -58,8 +60,11 @@ export class RolesController {
   @ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'Unauthorized' })
   @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'Forbidden' })
   @RequirePermission('roles', 'create')
-  async create(@Body() createRoleDto: CreateRoleDto): Promise<RoleResponseDto> {
-    const role = await this.rolesService.create(createRoleDto);
+  async create(
+    @Body() createRoleDto: CreateRoleDto,
+    @Req() req: AuthenticatedRequest,
+  ): Promise<RoleResponseDto> {
+    const role = await this.rolesService.create(createRoleDto, req.user.sub);
     return RoleResponseDto.fromEntity(role);
   }
 
@@ -84,8 +89,13 @@ export class RolesController {
   async update(
     @Param('id') id: string,
     @Body() updateRoleDto: UpdateRoleDto,
+    @Req() req: AuthenticatedRequest,
   ): Promise<RoleResponseDto> {
-    const role = await this.rolesService.update(id, updateRoleDto);
+    const role = await this.rolesService.update(
+      id,
+      updateRoleDto,
+      req.user.sub,
+    );
     return RoleResponseDto.fromEntity(role);
   }
 
@@ -106,7 +116,10 @@ export class RolesController {
   @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'Forbidden' })
   @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'Role not found' })
   @RequirePermission('roles', 'delete')
-  async remove(@Param('id') id: string): Promise<void> {
-    await this.rolesService.remove(id);
+  async remove(
+    @Param('id') id: string,
+    @Req() req: AuthenticatedRequest,
+  ): Promise<void> {
+    await this.rolesService.remove(id, req.user.sub);
   }
 }

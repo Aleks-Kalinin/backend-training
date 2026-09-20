@@ -1,4 +1,5 @@
 import { AuthGuard } from '@/modules/auth/auth.guard';
+import { type AuthenticatedRequest } from '@/modules/auth/dto/auth-request.dto';
 import {
   Body,
   Controller,
@@ -9,6 +10,7 @@ import {
   Param,
   Post,
   Put,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -62,9 +64,12 @@ export class PermissionsController {
   @RequirePermission('permissions', 'create')
   async create(
     @Body() createPermissionDto: CreatePermissionDto,
+    @Req() req: AuthenticatedRequest,
   ): Promise<PermissionResponseDto> {
-    const permission =
-      await this.permissionsService.create(createPermissionDto);
+    const permission = await this.permissionsService.create(
+      createPermissionDto,
+      req.user.sub,
+    );
     return PermissionResponseDto.fromEntity(permission);
   }
 
@@ -92,10 +97,12 @@ export class PermissionsController {
   async update(
     @Param('id') id: string,
     @Body() updatePermissionDto: UpdatePermissionDto,
+    @Req() req: AuthenticatedRequest,
   ): Promise<PermissionResponseDto> {
     const permission = await this.permissionsService.update(
       id,
       updatePermissionDto,
+      req.user.sub,
     );
     return PermissionResponseDto.fromEntity(permission);
   }
@@ -120,7 +127,10 @@ export class PermissionsController {
     description: 'Permission not found',
   })
   @RequirePermission('permissions', 'delete')
-  async remove(@Param('id') id: string): Promise<void> {
-    await this.permissionsService.remove(id);
+  async remove(
+    @Param('id') id: string,
+    @Req() req: AuthenticatedRequest,
+  ): Promise<void> {
+    await this.permissionsService.remove(id, req.user.sub);
   }
 }

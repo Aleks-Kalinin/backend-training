@@ -1,4 +1,5 @@
 import { AuthGuard } from '@/modules/auth/auth.guard';
+import { type AuthenticatedRequest } from '@/modules/auth/dto/auth-request.dto';
 import {
   Body,
   Controller,
@@ -9,6 +10,7 @@ import {
   Param,
   Post,
   Put,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -60,8 +62,9 @@ export class GrantsController {
   @RequirePermission('grants', 'create')
   async create(
     @Body() createGrantDto: CreateGrantDto,
+    @Req() req: AuthenticatedRequest,
   ): Promise<GrantResponseDto> {
-    const grant = await this.grantsService.create(createGrantDto);
+    const grant = await this.grantsService.create(createGrantDto, req.user.sub);
     return GrantResponseDto.fromEntity(grant);
   }
 
@@ -86,8 +89,13 @@ export class GrantsController {
   async update(
     @Param('id') id: string,
     @Body() updateGrantDto: UpdateGrantDto,
+    @Req() req: AuthenticatedRequest,
   ): Promise<GrantResponseDto> {
-    const grant = await this.grantsService.update(id, updateGrantDto);
+    const grant = await this.grantsService.update(
+      id,
+      updateGrantDto,
+      req.user.sub,
+    );
     return GrantResponseDto.fromEntity(grant);
   }
 
@@ -108,7 +116,10 @@ export class GrantsController {
   @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'Forbidden' })
   @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'Grant not found' })
   @RequirePermission('grants', 'delete')
-  async remove(@Param('id') id: string): Promise<void> {
-    await this.grantsService.remove(id);
+  async remove(
+    @Param('id') id: string,
+    @Req() req: AuthenticatedRequest,
+  ): Promise<void> {
+    await this.grantsService.remove(id, req.user.sub);
   }
 }

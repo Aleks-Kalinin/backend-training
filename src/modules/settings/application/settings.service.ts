@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import {
@@ -11,6 +11,7 @@ import { SystemSetting } from '../infrastructure/entity/system-setting.entity';
 
 @Injectable()
 export class SettingsService {
+  private readonly logger = new Logger(SettingsService.name);
   constructor(
     @InjectRepository(SystemSetting)
     private readonly systemSettingRepository: Repository<SystemSetting>,
@@ -91,6 +92,8 @@ export class SettingsService {
 
     if (updates.length > 0) {
       await this.systemSettingRepository.save(updates);
+
+      this.logger.log(`Settings updated successfully`);
     }
 
     return this.getVerificationSettings();
