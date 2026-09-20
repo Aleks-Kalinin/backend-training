@@ -1,4 +1,4 @@
-import { AuthTokenPayload } from '@/modules/auth/auth.guard';
+import { AuthTokenPayload } from '@/modules/auth/dto/auth-request.dto';
 import { MailService } from '@/modules/mail/application/mail.service';
 import { SystemRole } from '@/modules/rbac/domain/system-role.enum';
 import { Role } from '@/modules/rbac/infrastructure/entities/role.entity';
@@ -7,7 +7,9 @@ import { VerificationTokenType } from '@/modules/verification/infrastructure/ent
 import {
   ConflictException,
   ForbiddenException,
+  HttpStatus,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -30,6 +32,7 @@ import { User } from '../infrastructure/entity/user.entity';
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
   constructor(
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
@@ -41,6 +44,42 @@ export class UsersService {
     private readonly mailService: MailService,
     private readonly eventEmitter: EventEmitter2,
   ) {}
+
+  private logUserUpdateAudit(
+    event: 'UPDATE',
+    actorUserId: string,
+    targetUserId: string,
+    fields: string[],
+    status: number,
+  ): void {
+    this.logger.log(
+      JSON.stringify({
+        event,
+        actorUserId,
+        targetUserId,
+        fields,
+        status,
+      }),
+    );
+  }
+
+  private logUserDeleteAudit(
+    event: 'DELETE',
+    actorUserId: string,
+    targetUserId: string,
+    operationType: 'self' | 'admin',
+    status: number,
+  ): void {
+    this.logger.log(
+      JSON.stringify({
+        event,
+        actorUserId,
+        targetUserId,
+        operationType,
+        status,
+      }),
+    );
+  }
 
   async initiateEmailChange(
     userId: UUID,
@@ -145,7 +184,11 @@ export class UsersService {
       newUser.roles = [userRole];
     }
 
-    return this.usersRepository.save(newUser);
+    const savedUser = await this.usersRepository.save(newUser);
+
+    this.logger.log(`User with ID ${savedUser.userId} created successfully`);
+
+    return savedUser;
   }
 
   async updateUser(
@@ -153,21 +196,45 @@ export class UsersService {
     updateData: UpdateUserDto,
     requestingUser?: AuthTokenPayload,
   ): Promise<User> {
+    const actorUserId = requestingUser?.sub
+      ? String(requestingUser.sub)
+      : userId;
     const user = await this.usersRepository.findOne({ where: { userId } });
+
     if (!user) {
+      this.logUserUpdateAudit(
+        'UPDATE',
+        actorUserId,
+        userId,
+        Object.keys(updateData),
+        HttpStatus.NOT_FOUND,
+      );
       throw new Error('User not found');
     }
 
     if (requestingUser) {
       const isSelf = userId === String(requestingUser.sub);
-
       const isAdmin = requestingUser.roles.includes(SystemRole.ADMIN);
 
       if (!isSelf && !isAdmin) {
+        this.logUserUpdateAudit(
+          'UPDATE',
+          actorUserId,
+          userId,
+          Object.keys(updateData),
+          HttpStatus.FORBIDDEN,
+        );
         throw new ForbiddenException('Insufficient permissions');
       }
 
       if (isSelf && !isAdmin && updateData.email !== undefined) {
+        this.logUserUpdateAudit(
+          'UPDATE',
+          actorUserId,
+          userId,
+          Object.keys(updateData),
+          HttpStatus.FORBIDDEN,
+        );
         throw new ForbiddenException(
           'Direct email updates are not allowed. Use the dedicated endpoint for email changes.',
         );
@@ -179,6 +246,13 @@ export class UsersService {
         where: { email: updateData.email.trim().toLowerCase() },
       });
       if (existingUser) {
+        this.logUserUpdateAudit(
+          'UPDATE',
+          actorUserId,
+          userId,
+          Object.keys(updateData),
+          HttpStatus.CONFLICT,
+        );
         throw new ConflictException('Email already exists');
       }
 
@@ -186,10 +260,22 @@ export class UsersService {
     }
 
     Object.assign(user, updateData);
-    return this.usersRepository.save(user);
+
+    const savedUser = await this.usersRepository.save(user);
+
+    const changedFields = Object.keys(updateData);
+    this.logUserUpdateAudit(
+      'UPDATE',
+      actorUserId,
+      userId,
+      changedFields,
+      HttpStatus.OK,
+    );
+
+    return savedUser;
   }
 
-  async getUsers(query: GetUsersQueryDto) {
+  async getUsers(query: GetUsersQueryDto, actorUserId: UUID) {
     const { limit, q, status, sort = 'created_at', order = 'desc' } = query;
 
     const sortFields = {
@@ -225,6 +311,15 @@ export class UsersService {
 
     const users = await queryBuilder.getMany();
 
+    this.logger.log(
+      JSON.stringify({
+        actorUserId: actorUserId,
+        query: query,
+        status: HttpStatus.OK,
+        length: users.length,
+      }),
+    );
+
     return users;
   }
 
@@ -234,9 +329,18 @@ export class UsersService {
     requestingUser?: AuthTokenPayload,
     isAsync: boolean = false,
   ): Promise<DeleteUserResponseDto> {
+    const operationType: 'self' | 'admin' =
+      requestingUser?.sub === userId ? 'self' : 'admin';
     const user = await this.usersRepository.findOne({ where: { userId } });
 
     if (!user) {
+      this.logUserDeleteAudit(
+        'DELETE',
+        userId,
+        userId,
+        operationType,
+        HttpStatus.NOT_FOUND,
+      );
       throw new NotFoundException('User not found');
     }
 
@@ -274,6 +378,14 @@ export class UsersService {
             challenge.rawOtp,
           );
 
+          this.logUserDeleteAudit(
+            'DELETE',
+            String(userId),
+            String(userId),
+            operationType,
+            HttpStatus.OK,
+          );
+
           return {
             requiresConfirmation: true,
             challengeId: challenge.attemptId,
@@ -289,6 +401,13 @@ export class UsersService {
         );
 
         if (String(record.userId) !== String(userId)) {
+          this.logUserDeleteAudit(
+            'DELETE',
+            String(userId),
+            String(userId),
+            operationType,
+            HttpStatus.FORBIDDEN,
+          );
           throw new ForbiddenException('Invalid challenge session for user.');
         }
       }
@@ -323,7 +442,7 @@ export class UsersService {
         mode: job.mode,
       };
     } else {
-      await this.processUserDeletion(job, user);
+      await this.processUserDeletion(job, user, operationType);
       return {
         jobId: job.id,
         status: DeletionJobStatus.DONE,
@@ -335,7 +454,11 @@ export class UsersService {
     }
   }
 
-  async processUserDeletion(job: UserDeletionJob, user: User) {
+  async processUserDeletion(
+    job: UserDeletionJob,
+    user: User,
+    operationType: 'self' | 'admin',
+  ) {
     try {
       job.status = DeletionJobStatus.IN_PROGRESS;
       await this.userDeletionJobRepository.save(job);
@@ -350,6 +473,24 @@ export class UsersService {
       throw error;
     } finally {
       await this.userDeletionJobRepository.save(job);
+
+      if (job.status === DeletionJobStatus.DONE) {
+        this.logUserDeleteAudit(
+          'DELETE',
+          String(user.userId),
+          String(user.userId),
+          operationType,
+          HttpStatus.OK,
+        );
+      } else if (job.status === DeletionJobStatus.FAILED) {
+        this.logUserDeleteAudit(
+          'DELETE',
+          String(user.userId),
+          String(user.userId),
+          operationType,
+          HttpStatus.INTERNAL_SERVER_ERROR,
+        );
+      }
     }
   }
 

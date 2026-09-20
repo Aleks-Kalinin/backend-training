@@ -420,7 +420,7 @@ export class ConversionController {
       throw new Error('User ID is required');
     }
 
-    return this.conversionService.getHistory(userId);
+    return this.conversionService.getHistory(userId, userId);
   }
 
   @Get('admin/users/:userId/transformations/history')
@@ -480,8 +480,11 @@ export class ConversionController {
     },
   })
   @RequirePermission('history', 'read')
-  getAllTransformationHistory(@Param('userId') userId: UUID) {
-    return this.conversionService.getHistory(userId);
+  getAllTransformationHistory(
+    @Param('userId') userId: UUID,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.conversionService.getHistory(userId, req.user?.sub);
   }
 
   @Get('api/transformations/history/:itemId/download')

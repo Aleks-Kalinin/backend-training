@@ -1,9 +1,14 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
 import { Transporter, createTransport } from 'nodemailer';
 import SMTPTransport from 'nodemailer/lib/smtp-transport';
 
 @Injectable()
 export class MailService {
+  private readonly logger = new Logger(MailService.name);
   private transporter: Transporter;
 
   constructor() {
@@ -45,9 +50,10 @@ export class MailService {
           </div>
         `,
       });
+
+      this.logger.log(`Verification email sent to ${toEmail}`);
     } catch (error) {
-      // Avoid exposing raw SMTP errors to the client
-      console.error('Error sending verification email:', error);
+      this.logger.error(`Failed to dispatch verification email: ${error}`);
       throw new InternalServerErrorException(
         'Failed to dispatch verification email',
       );

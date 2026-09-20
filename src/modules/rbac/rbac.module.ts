@@ -7,6 +7,7 @@ import { RolesService } from './application/roles.service';
 import { Grant } from './infrastructure/entities/grant.entity';
 import { Permission } from './infrastructure/entities/permission.entity';
 import { Role } from './infrastructure/entities/role.entity';
+import { AuditLogger } from './infrastructure/logging/logAudit';
 import { GrantsController } from './presentation/grants.controller';
 import { PermissionsController } from './presentation/permissions.controller';
 import { RolesController } from './presentation/roles.controller';
@@ -22,6 +23,7 @@ import { RbacGuard } from './rbac.guard';
     GrantsService,
     RbacCacheService,
     RbacGuard,
+    AuditLogger,
   ],
   exports: [
     RbacCacheService,

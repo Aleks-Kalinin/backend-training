@@ -2,15 +2,18 @@ import { ConflictException, NotFoundException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { randomUUID } from 'node:crypto';
 import { Repository } from 'typeorm';
 import { Grant } from '../../infrastructure/entities/grant.entity';
 import { Role } from '../../infrastructure/entities/role.entity';
+import { AuditLogger } from '../../infrastructure/logging/logAudit';
 import { RolesService } from '../roles.service';
 
 describe('RolesService', () => {
   let service: RolesService;
   let roleRepository: jest.Mocked<Repository<Role>>;
   let eventEmitter: jest.Mocked<EventEmitter2>;
+  let auditLogger: jest.Mocked<AuditLogger>;
 
   beforeEach(async () => {
     roleRepository = {
@@ -25,6 +28,10 @@ describe('RolesService', () => {
       emit: jest.fn(),
     } as unknown as jest.Mocked<EventEmitter2>;
 
+    auditLogger = {
+      log: jest.fn(),
+    } as unknown as jest.Mocked<AuditLogger>;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         RolesService,
@@ -36,11 +43,17 @@ describe('RolesService', () => {
           provide: EventEmitter2,
           useValue: eventEmitter,
         },
+        {
+          provide: AuditLogger,
+          useValue: auditLogger,
+        },
       ],
     }).compile();
 
     service = module.get<RolesService>(RolesService);
   });
+
+  const mockUserId = randomUUID();
 
   describe('findAll', () => {
     it('returns array of all roles', async () => {
@@ -84,7 +97,10 @@ describe('RolesService', () => {
       } as Role);
 
       await expect(
-        service.create({ name: 'admin', description: 'Administrator' }),
+        service.create(
+          { name: 'admin', description: 'Administrator' },
+          mockUserId,
+        ),
       ).rejects.toThrow(
         new ConflictException('Role with name admin already exists'),
       );
@@ -97,7 +113,7 @@ describe('RolesService', () => {
       roleRepository.findOne.mockResolvedValue(null);
       roleRepository.save.mockResolvedValue(createdRole);
 
-      const result = await service.create(dto);
+      const result = await service.create(dto, mockUserId);
 
       expect(result).toBe(createdRole);
       expect(roleRepository.create).toHaveBeenCalledWith(dto);
@@ -113,7 +129,9 @@ describe('RolesService', () => {
         .mockResolvedValueOnce(existingRole) // for findOne(id)
         .mockResolvedValueOnce({ id: 'r2', name: 'editor' } as Role); // for name check
 
-      await expect(service.update('r1', { name: 'editor' })).rejects.toThrow(
+      await expect(
+        service.update('r1', { name: 'editor' }, mockUserId),
+      ).rejects.toThrow(
         new ConflictException('Role with name editor already exists'),
       );
     });
@@ -129,7 +147,11 @@ describe('RolesService', () => {
       roleRepository.findOne.mockResolvedValue(existingRole);
       roleRepository.save.mockResolvedValue(updatedRole);
 
-      const result = await service.update('r1', { description: 'New' });
+      const result = await service.update(
+        'r1',
+        { description: 'New' },
+        mockUserId,
+      );
 
       expect(result).toBe(updatedRole);
       expect(eventEmitter.emit).toHaveBeenCalledWith('rbac.changed');
@@ -140,7 +162,7 @@ describe('RolesService', () => {
     it('throws NotFoundException if role to remove is missing', async () => {
       roleRepository.findOne.mockResolvedValue(null);
 
-      await expect(service.remove('r1')).rejects.toThrow(
+      await expect(service.remove('r1', mockUserId)).rejects.toThrow(
         new NotFoundException('Role with ID r1 not found'),
       );
     });
@@ -154,7 +176,7 @@ describe('RolesService', () => {
 
       roleRepository.findOne.mockResolvedValue(roleWithGrants);
 
-      await expect(service.remove('r1')).rejects.toThrow(
+      await expect(service.remove('r1', mockUserId)).rejects.toThrow(
         new ConflictException(
           'Cannot delete role with active grants. Remove grants first.',
         ),
@@ -166,11 +188,12 @@ describe('RolesService', () => {
         id: 'r1',
         name: 'admin',
         grants: [],
+        description: 'Admin',
       } as Role;
 
       roleRepository.findOne.mockResolvedValue(roleWithoutGrants);
 
-      await service.remove('r1');
+      await service.remove('r1', mockUserId);
 
       expect(roleRepository.remove).toHaveBeenCalledWith(roleWithoutGrants);
       expect(eventEmitter.emit).toHaveBeenCalledWith('rbac.changed');

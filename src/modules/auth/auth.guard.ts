@@ -7,20 +7,10 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { FastifyRequest } from 'fastify';
-import { UUID } from 'node:crypto';
-import { UserStatus } from '../users/domain/user-status.enum';
 import { UsersService } from '../users/application/users.service';
+import { UserStatus } from '../users/domain/user-status.enum';
+import { AuthTokenPayload, AuthenticatedRequest } from './dto/auth-request.dto';
 import { AUTH_COOKIES } from './presentation/constants/auth.constants';
-
-export type AuthTokenPayload = {
-  sub: UUID;
-  email: string;
-  roles: string[];
-};
-
-export type AuthenticatedRequest = FastifyRequest & {
-  user?: AuthTokenPayload;
-};
 
 @Injectable()
 export class AuthGuard implements CanActivate {

@@ -98,6 +98,7 @@ export class VerificationService {
           HttpStatus.TOO_MANY_REQUESTS,
         );
       }
+      this.logger.warn('Invalid verification code.');
 
       throw new UnprocessableEntityException('Invalid verification code.');
     }
