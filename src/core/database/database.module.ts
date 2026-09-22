@@ -35,14 +35,16 @@ import { ConfigService } from '@/core/config/config.service';
         synchronize: String(config.get('POSTGRES_SYNCHRONIZE')) === 'true',
         logging: String(config.get('POSTGRES_LOGGING')) === 'true',
       }),
-      async dataSourceFactory(options) {
+      dataSourceFactory(options) {
         if (!options) {
           throw new Error('Invalid options passed');
         }
 
         deleteDataSourceByName('default');
 
-        return addTransactionalDataSource(new DataSource(options));
+        return Promise.resolve(
+          addTransactionalDataSource(new DataSource(options)),
+        );
       },
     }),
   ],
