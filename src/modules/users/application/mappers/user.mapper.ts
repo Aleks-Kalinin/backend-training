@@ -4,7 +4,7 @@ import {
   PUBLIC_PROFILE_FIELDS,
   SELF_PROFILE_FIELDS,
 } from '../../domain/user-profile-fields.config';
-import { User } from '../../infrastructure/entity/user.entity';
+import { User } from '../../domain/entities/user.entity';
 
 export class UserMapper {
   static toProfileResponseDto(targetUser: User, requester: AuthTokenPayload) {

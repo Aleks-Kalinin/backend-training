@@ -1,21 +1,25 @@
 import { AuthTokenPayload } from '@/modules/auth/dto/auth-request.dto';
 import { MailService } from '@/modules/mail/application/mail.service';
 import { SystemRole } from '@/modules/rbac/domain/system-role.enum';
-import { Role } from '@/modules/rbac/infrastructure/entities/role.entity';
 import { VerificationService } from '@/modules/verification/application/verification.service';
-import { VerificationTokenType } from '@/modules/verification/infrastructure/entity/verification-token.entity';
+import { VerificationTokenType } from '@/modules/verification/domain/verification-token-type.enum';
 import {
   ConflictException,
   ForbiddenException,
   HttpStatus,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { InjectRepository } from '@nestjs/typeorm';
 import { UUID } from 'node:crypto';
-import { Repository } from 'typeorm';
+import { USER_DELETION_JOB_REPOSITORY } from './ports/deletion-job-repository.port';
+import type { UserDeletionJobRepository } from './ports/deletion-job-repository.port';
+import { USER_REPOSITORY } from './ports/user-repository.port';
+import type { UserRepository } from './ports/user-repository.port';
+import { USER_ROLE_REPOSITORY } from './ports/role-repository.port';
+import type { UserRoleRepository } from './ports/role-repository.port';
 import { ConfirmEmailChangeDto } from '../dto/confirm-email-change.dto';
 import { CreateUserDto } from '../dto/create-user.dto';
 import { DeleteUserResponseDto } from '../dto/delete-user-response.dto';
@@ -27,19 +31,20 @@ import {
   DeletionExecutionMode,
   DeletionJobStatus,
   UserDeletionJob,
-} from '../infrastructure/entity/user-deletion-job.entity';
-import { User } from '../infrastructure/entity/user.entity';
+} from '../domain/deletion';
+import { User } from '../domain/entities/user.entity';
+import { UserStatus } from '../domain/user-status.enum';
 
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
   constructor(
-    @InjectRepository(User)
-    private readonly usersRepository: Repository<User>,
-    @InjectRepository(UserDeletionJob)
-    private readonly userDeletionJobRepository: Repository<UserDeletionJob>,
-    @InjectRepository(Role)
-    private readonly roleRepository: Repository<Role>,
+    @Inject(USER_REPOSITORY)
+    private readonly usersRepository: UserRepository,
+    @Inject(USER_DELETION_JOB_REPOSITORY)
+    private readonly userDeletionJobRepository: UserDeletionJobRepository,
+    @Inject(USER_ROLE_REPOSITORY)
+    private readonly roleRepository: UserRoleRepository,
     private readonly verificationService: VerificationService,
     private readonly mailService: MailService,
     private readonly eventEmitter: EventEmitter2,
@@ -140,7 +145,7 @@ export class UsersService {
       throw new ConflictException('Proposed email already exists');
     }
 
-    const user = await this.usersRepository.findOne({ where: { userId } });
+    const user = await this.usersRepository.findById(String(userId));
     if (!user) {
       throw new NotFoundException('User not found');
     }
@@ -152,16 +157,11 @@ export class UsersService {
   }
 
   async findOne(email: string): Promise<User | null> {
-    return this.usersRepository.findOne({
-      where: { email: email.trim().toLowerCase() },
-      relations: ['roles'],
-    });
+    return this.usersRepository.findByEmail(email);
   }
 
   async getUser(userId: string): Promise<User | null> {
-    return this.usersRepository.findOne({
-      where: { userId },
-    });
+    return this.usersRepository.findById(userId);
   }
 
   async createUser({
@@ -173,13 +173,12 @@ export class UsersService {
     const newUser = this.usersRepository.create({
       email: email.trim().toLowerCase(),
       password,
-      status,
+      status: status ?? UserStatus.PENDING,
       isVerified,
+      photo: null,
     });
 
-    const userRole = await this.roleRepository.findOne({
-      where: { name: SystemRole.USER },
-    });
+    const userRole = await this.roleRepository.findDefaultRole();
     if (userRole) {
       newUser.roles = [userRole];
     }
@@ -199,7 +198,7 @@ export class UsersService {
     const actorUserId = requestingUser?.sub
       ? String(requestingUser.sub)
       : userId;
-    const user = await this.usersRepository.findOne({ where: { userId } });
+    const user = await this.usersRepository.findById(userId);
 
     if (!user) {
       this.logUserUpdateAudit(
@@ -242,9 +241,9 @@ export class UsersService {
     }
 
     if (updateData.email && updateData.email !== user.email) {
-      const existingUser = await this.usersRepository.findOne({
-        where: { email: updateData.email.trim().toLowerCase() },
-      });
+      const existingUser = await this.usersRepository.findByEmail(
+        updateData.email.trim().toLowerCase(),
+      );
       if (existingUser) {
         this.logUserUpdateAudit(
           'UPDATE',
@@ -278,38 +277,13 @@ export class UsersService {
   async getUsers(query: GetUsersQueryDto, actorUserId: UUID) {
     const { limit, q, status, sort = 'created_at', order = 'desc' } = query;
 
-    const sortFields = {
-      created_at: 'user.createdAt',
-      updated_at: 'user.updatedAt',
-      email: 'user.email',
-    };
-
-    const queryBuilder = this.usersRepository.createQueryBuilder('user');
-
-    if (status) {
-      queryBuilder.andWhere('user.status = :status', { status });
-    }
-
-    if (q) {
-      queryBuilder.andWhere(
-        `
-      user.email ILIKE :q
-      OR CAST(user.id AS TEXT) ILIKE :q
-      `,
-        {
-          q: `%${q}%`,
-        },
-      );
-    }
-
-    queryBuilder.orderBy(
-      sortFields[sort],
-      order.toUpperCase() as 'ASC' | 'DESC',
-    );
-
-    queryBuilder.take(limit);
-
-    const users = await queryBuilder.getMany();
+    const users = await this.usersRepository.findMany({
+      limit,
+      q,
+      status,
+      sort,
+      order,
+    });
 
     this.logger.log(
       JSON.stringify({
@@ -331,7 +305,7 @@ export class UsersService {
   ): Promise<DeleteUserResponseDto> {
     const operationType: 'self' | 'admin' =
       requestingUser?.sub === userId ? 'self' : 'admin';
-    const user = await this.usersRepository.findOne({ where: { userId } });
+    const user = await this.usersRepository.findById(String(userId));
 
     if (!user) {
       this.logUserDeleteAudit(
@@ -344,10 +318,9 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    const existingJob = await this.userDeletionJobRepository.findOne({
-      where: { userId },
-      order: { createdAt: 'DESC' },
-    });
+    const existingJob = await this.userDeletionJobRepository.findLatestByUserId(
+      String(userId),
+    );
 
     if (
       existingJob &&
@@ -498,10 +471,7 @@ export class UsersService {
     userId: string,
     requestingUser?: AuthTokenPayload,
   ) {
-    const job = await this.userDeletionJobRepository.findOne({
-      where: { userId },
-      order: { createdAt: 'DESC' },
-    });
+    const job = await this.userDeletionJobRepository.findLatestByUserId(userId);
 
     if (!job) {
       throw new NotFoundException('Job not found');

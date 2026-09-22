@@ -6,18 +6,12 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import {
+  DeletionExecutionMode,
+  DeletionJobStatus,
+} from '../../domain/deletion';
 
-export enum DeletionJobStatus {
-  PENDING = 'pending',
-  IN_PROGRESS = 'in_progress',
-  DONE = 'done',
-  FAILED = 'failed',
-}
-
-export enum DeletionExecutionMode {
-  SYNC = 'sync',
-  ASYNC = 'async',
-}
+export { DeletionExecutionMode, DeletionJobStatus };
 
 @Entity('user_deletion_jobs')
 export class UserDeletionJob {

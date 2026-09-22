@@ -8,12 +8,9 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { User } from '../../../users/infrastructure/entity/user.entity';
+import { VerificationTokenType } from '../../domain/verification-token-type.enum';
 
-export enum VerificationTokenType {
-  REGISTRATION = 'REGISTRATION',
-  EMAIL_CHANGE = 'EMAIL_CHANGE',
-  USER_DELETION = 'USER_DELETION',
-}
+export { VerificationTokenType };
 
 @Entity('verification_tokens')
 @Index(['userId', 'type'])
