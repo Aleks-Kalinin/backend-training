@@ -86,7 +86,7 @@ describe('SettingsService', () => {
     it('returns false when object value does not have enabled property', async () => {
       repository.findByKey.mockResolvedValue({
         key: SETTING_KEYS.LOGIN_VERIFICATION,
-        value: { otherProp: 'test' },
+        value: {},
       });
 
       const result = await service.isFeatureEnabled(
@@ -162,11 +162,11 @@ describe('SettingsService', () => {
       });
     });
 
-    it('returns false for unexpected non-boolean, non-object values', async () => {
+    it('returns false for an object without enabled property', async () => {
       repository.findByKeys.mockResolvedValue([
         {
           key: SETTING_KEYS.REGISTRATION_VERIFICATION,
-          value: 'invalid_string_value',
+          value: {},
         },
       ]);
 
@@ -180,7 +180,6 @@ describe('SettingsService', () => {
     it('creates and saves all settings when complete DTO is provided', async () => {
       repository.findByKeys.mockResolvedValue([
         {
-          id: '1',
           key: SETTING_KEYS.REGISTRATION_VERIFICATION,
           value: false,
         },

@@ -35,6 +35,14 @@ import {
 import { User } from '../domain/entities/user.entity';
 import { UserStatus } from '../domain/user-status.enum';
 
+type DeleteUserResult =
+  | DeleteUserResponseDto
+  | {
+      requiresConfirmation: true;
+      challengeId: string;
+      message: string;
+    };
+
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
@@ -302,7 +310,7 @@ export class UsersService {
     dto: DeleteUserDto = {},
     requestingUser?: AuthTokenPayload,
     isAsync: boolean = false,
-  ): Promise<DeleteUserResponseDto> {
+  ): Promise<DeleteUserResult> {
     const operationType: 'self' | 'admin' =
       requestingUser?.sub === userId ? 'self' : 'admin';
     const user = await this.usersRepository.findById(String(userId));
@@ -364,7 +372,7 @@ export class UsersService {
             challengeId: challenge.attemptId,
             message:
               'Verification OTP sent to your email. Please submit request with challengeId and code.',
-          } as any;
+          };
         }
 
         const record = await this.verificationService.verifyOtp(

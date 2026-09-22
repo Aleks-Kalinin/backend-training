@@ -13,8 +13,8 @@ import { RBAC_AUDIT } from '../ports/audit.port';
 
 describe('RolesService', () => {
   let service: RolesService;
-  let roleRepository: jest.Mocked<Repository<Role>>;
-  let eventEmitter: jest.Mocked<EventEmitter2>;
+  let roleRepository: jest.Mocked<Repository<Role>> & Record<string, jest.Mock>;
+  let eventEmitter: jest.Mocked<EventEmitter2> & { changed: jest.Mock };
   let auditLogger: jest.Mocked<AuditLogger>;
 
   beforeEach(async () => {
@@ -27,11 +27,11 @@ describe('RolesService', () => {
       create: jest.fn((dto) => dto as Role),
       save: jest.fn(),
       remove: jest.fn(),
-    } as unknown as jest.Mocked<Repository<Role>>;
+    } as unknown as jest.Mocked<Repository<Role>> & Record<string, jest.Mock>;
 
     eventEmitter = {
       emit: jest.fn(),
-    } as unknown as jest.Mocked<EventEmitter2>;
+    } as unknown as jest.Mocked<EventEmitter2> & { changed: jest.Mock };
 
     auditLogger = {
       log: jest.fn(),

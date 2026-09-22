@@ -6,13 +6,14 @@ import { GRANT_REPOSITORY } from '../ports/rbac-repositories.port';
 
 describe('RbacCacheService', () => {
   let service: RbacCacheService;
-  let grantRepository: jest.Mocked<Repository<Grant>>;
+  let grantRepository: jest.Mocked<Repository<Grant>> &
+    Record<string, jest.Mock>;
 
   beforeEach(async () => {
     grantRepository = {
       find: jest.fn(),
       findForCache: jest.fn(),
-    } as unknown as jest.Mocked<Repository<Grant>>;
+    } as unknown as jest.Mocked<Repository<Grant>> & Record<string, jest.Mock>;
     grantRepository.findForCache = grantRepository.find as never;
 
     const module: TestingModule = await Test.createTestingModule({

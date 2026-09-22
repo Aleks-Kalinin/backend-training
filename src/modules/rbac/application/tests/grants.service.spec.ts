@@ -22,10 +22,12 @@ import { RBAC_AUDIT } from '../ports/audit.port';
 
 describe('GrantsService', () => {
   let service: GrantsService;
-  let grantRepository: jest.Mocked<Repository<Grant>>;
-  let roleRepository: jest.Mocked<Repository<Role>>;
-  let permissionRepository: jest.Mocked<Repository<Permission>>;
-  let eventEmitter: jest.Mocked<EventEmitter2>;
+  let grantRepository: jest.Mocked<Repository<Grant>> &
+    Record<string, jest.Mock>;
+  let roleRepository: jest.Mocked<Repository<Role>> & Record<string, jest.Mock>;
+  let permissionRepository: jest.Mocked<Repository<Permission>> &
+    Record<string, jest.Mock>;
+  let eventEmitter: jest.Mocked<EventEmitter2> & { changed: jest.Mock };
   let auditLogger: jest.Mocked<AuditLogger>;
 
   beforeEach(async () => {
@@ -39,21 +41,22 @@ describe('GrantsService', () => {
       create: jest.fn((dto) => dto as Grant),
       save: jest.fn(),
       remove: jest.fn(),
-    } as unknown as jest.Mocked<Repository<Grant>>;
+    } as unknown as jest.Mocked<Repository<Grant>> & Record<string, jest.Mock>;
 
     roleRepository = {
       findOne: jest.fn(),
       findById: jest.fn(),
-    } as unknown as jest.Mocked<Repository<Role>>;
+    } as unknown as jest.Mocked<Repository<Role>> & Record<string, jest.Mock>;
 
     permissionRepository = {
       findOne: jest.fn(),
       findById: jest.fn(),
-    } as unknown as jest.Mocked<Repository<Permission>>;
+    } as unknown as jest.Mocked<Repository<Permission>> &
+      Record<string, jest.Mock>;
 
     eventEmitter = {
       emit: jest.fn(),
-    } as unknown as jest.Mocked<EventEmitter2>;
+    } as unknown as jest.Mocked<EventEmitter2> & { changed: jest.Mock };
 
     auditLogger = {
       log: jest.fn(),

@@ -24,11 +24,7 @@ import { RBAC_EVENTS } from './ports/rbac-events.port';
 import type { RbacEvents } from './ports/rbac-events.port';
 import { RBAC_AUDIT } from './ports/audit.port';
 import type { RbacAudit } from './ports/audit.port';
-import type {
-  RbacGrant as Grant,
-  RbacPermission as Permission,
-  RbacRole as Role,
-} from '../domain/rbac.models';
+import type { RbacGrant as Grant } from '../domain/rbac.models';
 
 @Injectable()
 export class GrantsService {

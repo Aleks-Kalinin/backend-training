@@ -24,7 +24,7 @@ export class UserDeletionListener {
 
   @OnEvent('user.delete.request', { async: true })
   async handleUserSoftDeleted(payload: UserDeletionEventPayload) {
-    const { jobId, userId } = payload;
+    const { userId } = payload;
 
     const job = await this.userDeletionJobRepository.findLatestByUserId(userId);
     const user = await this.usersRepository.findById(userId);

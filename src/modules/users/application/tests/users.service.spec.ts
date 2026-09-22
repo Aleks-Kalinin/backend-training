@@ -1,9 +1,16 @@
 import { AuthTokenPayload } from '@/modules/auth/dto/auth-request.dto';
 import { MailService } from '@/modules/mail/application/mail.service';
 import { SystemRole } from '@/modules/rbac/domain/system-role.enum';
-import { Role } from '@/modules/rbac/infrastructure/entities/role.entity';
 import { VerificationService } from '@/modules/verification/application/verification.service';
 import { VerificationTokenType } from '@/modules/verification/infrastructure/entity/verification-token.entity';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  jest,
+} from '@jest/globals';
 import {
   ConflictException,
   ForbiddenException,
@@ -11,13 +18,10 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Test, TestingModule } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
 import { type UUID } from 'node:crypto';
-import { Repository } from 'typeorm';
+import type { UserRole } from '../../domain/entities/user.entity';
+import type { User } from '../../domain/entities/user.entity';
 import { UserStatus } from '../../domain/user-status.enum';
-import { USER_DELETION_JOB_REPOSITORY } from '../ports/deletion-job-repository.port';
-import { USER_REPOSITORY } from '../ports/user-repository.port';
-import { USER_ROLE_REPOSITORY } from '../ports/role-repository.port';
 import { ConfirmEmailChangeDto } from '../../dto/confirm-email-change.dto';
 import { CreateUserDto } from '../../dto/create-user.dto';
 import { DeleteUserDto } from '../../dto/delete-user.dto';
@@ -28,15 +32,36 @@ import {
   DeletionExecutionMode,
   DeletionJobStatus,
   UserDeletionJob,
-} from '../../infrastructure/entity/user-deletion-job.entity';
-import { User } from '../../infrastructure/entity/user.entity';
+} from '../../domain/deletion';
+import {
+  USER_DELETION_JOB_REPOSITORY,
+  UserDeletionJobRepository,
+} from '../ports/deletion-job-repository.port';
+import {
+  USER_ROLE_REPOSITORY,
+  UserRoleRepository,
+} from '../ports/role-repository.port';
+import { USER_REPOSITORY, UserRepository } from '../ports/user-repository.port';
 import { UsersService } from '../users.service';
 
 describe('UsersService', () => {
   let service: UsersService;
-  let usersRepository: any;
-  let userDeletionJobRepository: any;
-  let roleRepository: any;
+  type UsersRepositoryMock = jest.Mocked<UserRepository> & {
+    findOne: jest.MockedFunction<(userId: string) => Promise<User | null>>;
+  };
+  type UserDeletionJobRepositoryMock =
+    jest.Mocked<UserDeletionJobRepository> & {
+      findOne: jest.MockedFunction<
+        (userId: string) => Promise<UserDeletionJob | null>
+      >;
+    };
+  type RoleRepositoryMock = jest.Mocked<UserRoleRepository> & {
+    findOne: jest.MockedFunction<() => Promise<UserRole | null>>;
+  };
+
+  let usersRepository: UsersRepositoryMock;
+  let userDeletionJobRepository: UserDeletionJobRepositoryMock;
+  let roleRepository: RoleRepositoryMock;
   let verificationService: jest.Mocked<VerificationService>;
   let mailService: jest.Mocked<MailService>;
   let eventEmitter: jest.Mocked<EventEmitter2>;
@@ -56,7 +81,7 @@ describe('UsersService', () => {
         name: SystemRole.USER,
         description: 'User Role',
         grants: [],
-      } as unknown as Role,
+      } as UserRole,
     ],
   };
 
@@ -74,7 +99,7 @@ describe('UsersService', () => {
 
   beforeEach(async () => {
     usersRepository = {
-      create: jest.fn((entity) => ({ ...entity }) as User),
+      create: jest.fn((entity: Partial<User>) => ({ ...entity }) as User),
       findOne: jest.fn(),
       findByEmail: jest.fn(),
       findById: jest.fn(),
@@ -83,19 +108,24 @@ describe('UsersService', () => {
       update: jest.fn(),
       remove: jest.fn((entity) => Promise.resolve(entity as User)),
       createQueryBuilder: jest.fn(),
-    } as unknown as jest.Mocked<Repository<User>>;
+    } as unknown as UsersRepositoryMock;
 
     userDeletionJobRepository = {
-      create: jest.fn((entity) => ({ ...entity }) as UserDeletionJob),
+      create: jest.fn(
+        (entity: Partial<UserDeletionJob>) =>
+          ({
+            ...entity,
+          }) as UserDeletionJob,
+      ),
       findOne: jest.fn(),
       findLatestByUserId: jest.fn(),
       save: jest.fn((entity) => Promise.resolve(entity as UserDeletionJob)),
-    } as unknown as jest.Mocked<Repository<UserDeletionJob>>;
+    } as unknown as UserDeletionJobRepositoryMock;
 
     roleRepository = {
       findOne: jest.fn(),
       findDefaultRole: jest.fn(),
-    } as unknown as jest.Mocked<Repository<Role>>;
+    } as unknown as RoleRepositoryMock;
 
     usersRepository.findByEmail = usersRepository.findOne as never;
     usersRepository.findById = usersRepository.findOne as never;
@@ -226,7 +256,6 @@ describe('UsersService', () => {
         createdAt: new Date(),
         updatedAt: new Date(),
         tokenHash: 'hash',
-        user: mockUser,
       });
 
       await expect(
@@ -246,7 +275,6 @@ describe('UsersService', () => {
         createdAt: new Date(),
         updatedAt: new Date(),
         tokenHash: 'hash',
-        user: mockUser,
       });
 
       await expect(
@@ -266,7 +294,6 @@ describe('UsersService', () => {
         createdAt: new Date(),
         updatedAt: new Date(),
         tokenHash: 'hash',
-        user: mockUser,
       });
 
       usersRepository.findOne.mockResolvedValue({
@@ -292,7 +319,6 @@ describe('UsersService', () => {
         createdAt: new Date(),
         updatedAt: new Date(),
         tokenHash: 'hash',
-        user: mockUser,
       });
 
       usersRepository.findOne.mockResolvedValue(null);
@@ -314,7 +340,6 @@ describe('UsersService', () => {
         createdAt: new Date(),
         updatedAt: new Date(),
         tokenHash: 'hash',
-        user: mockUser,
       });
 
       usersRepository.findOne
@@ -374,7 +399,7 @@ describe('UsersService', () => {
         name: SystemRole.USER,
         description: 'User role',
         grants: [],
-      } as Role;
+      } as UserRole;
 
       roleRepository.findOne.mockResolvedValue(mockRole);
 
@@ -484,7 +509,7 @@ describe('UsersService', () => {
         order: 'desc',
       };
 
-      const result = await service.getUsers(queryDto);
+      const result = await service.getUsers(queryDto, mockAdminUserPayload.sub);
 
       expect(usersRepository.findMany).toHaveBeenCalledWith({
         limit: 10,
@@ -568,7 +593,6 @@ describe('UsersService', () => {
         createdAt: new Date(),
         updatedAt: new Date(),
         tokenHash: 'hash',
-        user: mockUser,
       });
 
       const deleteDto: DeleteUserDto = {
@@ -588,7 +612,7 @@ describe('UsersService', () => {
         '654321',
         VerificationTokenType.USER_DELETION,
       );
-      expect(result.status).toBe(DeletionJobStatus.DONE);
+      expect('status' in result && result.status).toBe(DeletionJobStatus.DONE);
     });
 
     it('throws ForbiddenException if deletion OTP challenge belongs to another user', async () => {
@@ -604,7 +628,6 @@ describe('UsersService', () => {
         createdAt: new Date(),
         updatedAt: new Date(),
         tokenHash: 'hash',
-        user: mockUser,
       });
 
       const deleteDto: DeleteUserDto = {
@@ -632,7 +655,9 @@ describe('UsersService', () => {
         'user.delete.request',
         expect.objectContaining({ userId }),
       );
-      expect(result.status).toBe(DeletionJobStatus.PENDING);
+      expect('status' in result && result.status).toBe(
+        DeletionJobStatus.PENDING,
+      );
     });
   });
 
@@ -648,7 +673,7 @@ describe('UsersService', () => {
         updatedAt: new Date(),
       };
 
-      await service.processUserDeletion(job, mockUser);
+      await service.processUserDeletion(job, mockUser, 'self');
 
       expect(usersRepository.remove).toHaveBeenCalledWith(mockUser);
       expect(userDeletionJobRepository.save).toHaveBeenCalledWith(
@@ -669,9 +694,9 @@ describe('UsersService', () => {
 
       usersRepository.remove.mockRejectedValue(new Error('DB Error'));
 
-      await expect(service.processUserDeletion(job, mockUser)).rejects.toThrow(
-        'DB Error',
-      );
+      await expect(
+        service.processUserDeletion(job, mockUser, 'self'),
+      ).rejects.toThrow('DB Error');
       expect(userDeletionJobRepository.save).toHaveBeenCalledWith(
         expect.objectContaining({
           status: DeletionJobStatus.FAILED,
