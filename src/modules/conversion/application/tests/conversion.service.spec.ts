@@ -22,6 +22,9 @@ import { TransformationHistoryItemEntity } from '../../infrastructure/entity/tra
 import { FILE_CONVERSION_STATUS } from '../constants/file-conversion-status';
 import { FILE_TYPE } from '../constants/file-type';
 import { ConversionService } from '../conversion.service';
+import { CONVERSION_ENGINE } from '../ports/conversion-engine.port';
+import { FILE_STORAGE } from '../ports/file-storage.port';
+import { HISTORY_REPOSITORY } from '../ports/history-repository.port';
 
 const mockPiscinaRun = jest.fn();
 const mockPiscinaDestroy = jest.fn();
@@ -78,6 +81,74 @@ describe('ConversionService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ConversionService,
+        {
+          provide: CONVERSION_ENGINE,
+          useValue: {
+            convertText: (
+              buffer: Buffer,
+              originalFormat: string,
+              targetFormat: string,
+              signal?: AbortSignal,
+            ) =>
+              mockPiscinaRun(
+                { buffer, originalFormat, targetFormat },
+                { name: 'convertTextFile', signal },
+              ),
+            convertImage: (
+              buffer: Buffer,
+              originalFormat: string,
+              targetFormat: string,
+              options: unknown,
+              signal?: AbortSignal,
+            ) =>
+              mockPiscinaRun(
+                { buffer, originalFormat, targetFormat, options },
+                { name: 'convertImageFile', signal },
+              ),
+            close: mockPiscinaDestroy,
+          },
+        },
+        {
+          provide: FILE_STORAGE,
+          useValue: {
+            save: async (content: string | Buffer, extension: string) => {
+              await fs.mkdir('uploads', { recursive: true });
+              await fs.writeFile(`uploads/file.${extension}`, content);
+              const record = await convertedFileRepository.save({
+                filePath: `uploads/file.${extension}`,
+              });
+              return { id: record.id, filePath: record.filePath };
+            },
+            exists: (filePath: string) => Promise.resolve(existsSync(filePath)),
+            open: (filePath: string) => createReadStream(filePath),
+          },
+        },
+        {
+          provide: HISTORY_REPOSITORY,
+          useValue: {
+            find: async (query: any) => {
+              const qb = transformationHistoryRepository
+                .createQueryBuilder('history')
+                .where('history.userId = :userId', { userId: query.userId });
+              if (query.type)
+                qb.andWhere('history.type = :type', { type: query.type });
+              if (query.status)
+                qb.andWhere('history.status = :status', {
+                  status: query.status,
+                });
+              return qb.take(query.limit + 1).getMany();
+            },
+            findFile: (userId: string, itemId: string) =>
+              transformationHistoryRepository.findOne({
+                where: { id: itemId, userId },
+                relations: ['file'],
+              }),
+            save: (entry: unknown) =>
+              transformationHistoryRepository
+                .save(entry as never)
+                .then(() => undefined),
+          },
+        },
         {
           provide: getRepositoryToken(TransformationHistoryItemEntity),
           useValue: transformationHistoryRepository,
@@ -308,7 +379,6 @@ describe('ConversionService', () => {
           buffer: mockFileBuffer,
           originalFormat: TextFileFormat.JSON,
           targetFormat: TextFileFormat.YAML,
-          options: { indent: 2 },
         },
         {
           name: 'convertTextFile',

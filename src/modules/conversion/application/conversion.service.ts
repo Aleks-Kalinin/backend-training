@@ -11,22 +11,20 @@ import {
   RequestTimeoutException,
   StreamableFile,
   UnsupportedMediaTypeException,
+  Inject,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
 import { FastifyRequest } from 'fastify';
-import { randomUUID, UUID } from 'node:crypto';
-import { createReadStream, existsSync } from 'node:fs';
-import * as fs from 'node:fs/promises';
-import * as os from 'node:os';
-import * as path from 'node:path';
-import Piscina from 'piscina';
-import { Repository } from 'typeorm';
+import { UUID } from 'node:crypto';
 import { ImageConversionOptions } from '../domain/image-conversion-options';
 import { ImageFileFormat } from '../domain/image-file-format.enum';
 import { TextFileFormat } from '../domain/text-file-format.enum';
 import { GetHistoryQueryDto } from '../dto/get-history-query.dto';
-import { ConvertedFileEntity } from '../infrastructure/entity/converted-file.entity';
-import { TransformationHistoryItemEntity } from '../infrastructure/entity/transformation-history-item.entity';
+import { CONVERSION_ENGINE } from './ports/conversion-engine.port';
+import type { ConversionEngine } from './ports/conversion-engine.port';
+import { FILE_STORAGE } from './ports/file-storage.port';
+import type { FileStorage } from './ports/file-storage.port';
+import { HISTORY_REPOSITORY } from './ports/history-repository.port';
+import type { HistoryRepository } from './ports/history-repository.port';
 import { FILE_CONVERSION_STATUS } from './constants/file-conversion-status';
 import { FILE_SIZE_LIMITS } from './constants/file-size-limit';
 import { FILE_TYPE } from './constants/file-type';
@@ -54,22 +52,15 @@ interface createHistoryEntryParams {
 
 @Injectable()
 export class ConversionService implements OnModuleDestroy {
-  private piscina: Piscina;
   private logger = new Logger(ConversionService.name);
   constructor(
-    @InjectRepository(TransformationHistoryItemEntity)
-    private readonly transformationHistoryRepository: Repository<TransformationHistoryItemEntity>,
-    @InjectRepository(ConvertedFileEntity)
-    private readonly convertedFileRepository: Repository<ConvertedFileEntity>,
-  ) {
-    this.piscina = new Piscina({
-      filename: path.resolve(
-        __dirname,
-        '../infrastructure/workers/conversion.worker.js',
-      ),
-      maxThreads: Math.max(1, Math.floor(os.cpus().length / 2)),
-    });
-  }
+    @Inject(CONVERSION_ENGINE)
+    private readonly conversionEngine: ConversionEngine,
+    @Inject(FILE_STORAGE)
+    private readonly fileStorage: FileStorage,
+    @Inject(HISTORY_REPOSITORY)
+    private readonly historyRepository: HistoryRepository,
+  ) {}
 
   private logConversionProcess(
     actorUserId: UUID,
@@ -91,17 +82,7 @@ export class ConversionService implements OnModuleDestroy {
   }
 
   async onModuleDestroy() {
-    await this.piscina.destroy();
-  }
-
-  private async saveLocally(content: string | Buffer, extension: string) {
-    const uploadDir = path.join(process.cwd(), 'uploads');
-
-    await fs.mkdir(uploadDir, { recursive: true });
-    const filename = `${randomUUID()}.${extension}`;
-    const filePath = path.join(uploadDir, filename);
-    await fs.writeFile(filePath, content);
-    return filePath;
+    await this.conversionEngine.close();
   }
 
   async convertMultipartRequest(
@@ -261,33 +242,28 @@ export class ConversionService implements OnModuleDestroy {
       }
 
       // 5. Off-load Task to Worker Pool
-      const isTextFile = fileType === FILE_TYPE.TEXT;
-      const workerTaskName = isTextFile
-        ? 'convertTextFile'
-        : 'convertImageFile';
-
-      const convertedContent = await this.piscina.run(
-        {
-          buffer: fileBuffer,
-          originalFormat: sourceFormat,
-          targetFormat,
-          options,
-        },
-        {
-          name: workerTaskName,
-          signal: controller.signal,
-        },
-      );
+      const convertedContent =
+        fileType === FILE_TYPE.TEXT
+          ? await this.conversionEngine.convertText(
+              fileBuffer,
+              sourceFormat,
+              targetFormat,
+              controller.signal,
+            )
+          : await this.conversionEngine.convertImage(
+              fileBuffer,
+              sourceFormat,
+              targetFormat,
+              options,
+              controller.signal,
+            );
 
       if (shouldSave) {
-        const savedFilePath = await this.saveLocally(
+        const savedFile = await this.fileStorage.save(
           convertedContent,
           targetFormat,
         );
-        const fileRecord = await this.convertedFileRepository.save({
-          filePath: savedFilePath,
-        });
-        createdFileId = fileRecord.id;
+        createdFileId = savedFile.id as UUID;
         this.logger.log(
           JSON.stringify({
             type: 'SAVE',
@@ -384,40 +360,26 @@ export class ConversionService implements OnModuleDestroy {
       createdAtTo,
     } = query;
 
-    const qb = this.transformationHistoryRepository
-      .createQueryBuilder('history')
-      .where('history.userId = :userId', { userId });
-
-    if (type) qb.andWhere('history.type = :type', { type });
-    if (sourceFormat)
-      qb.andWhere('history.sourceFormat = :sourceFormat', { sourceFormat });
-    if (targetFormat)
-      qb.andWhere('history.targetFormat = :targetFormat', { targetFormat });
-    if (status) qb.andWhere('history.status = :status', { status });
-    if (createdAtFrom)
-      qb.andWhere('history.createdAt >= :createdAtFrom', { createdAtFrom });
-    if (createdAtTo)
-      qb.andWhere('history.createdAt <= :createdAtTo', { createdAtTo });
-
+    let cursorPayload: CursorPayload | undefined;
     if (cursor) {
-      const decodedCursor = this.decodeCursor(cursor);
-      qb.andWhere(
-        '(history.createdAt < :cursorCreatedAt OR (history.createdAt = :cursorCreatedAt AND history.id < :cursorId))',
-        {
-          cursorCreatedAt: decodedCursor.createdAt,
-          cursorId: decodedCursor.id,
-        },
-      );
+      cursorPayload = this.decodeCursor(cursor);
     }
-
-    qb.orderBy('history.createdAt', 'DESC')
-      .orderBy('history.id', 'DESC')
-      .take(limit + 1);
-
-    const res = await qb.getMany();
+    const res = await this.historyRepository.find({
+      userId: String(userId),
+      limit,
+      cursor: cursorPayload
+        ? { id: cursorPayload.id, createdAt: new Date(cursorPayload.createdAt) }
+        : undefined,
+      type,
+      sourceFormat,
+      targetFormat,
+      status,
+      createdAtFrom,
+      createdAtTo,
+    });
     let nextCursor: string | null = null;
     if (res.length > limit) {
-      const nextItem = res.pop();
+      res.pop();
       if (res.length > 0) {
         const lastItem = res[res.length - 1];
         nextCursor = this.encodeCursor({
@@ -462,10 +424,10 @@ export class ConversionService implements OnModuleDestroy {
   }
 
   async getFileForDownload(userId: UUID, itemId: UUID) {
-    const historyItem = await this.transformationHistoryRepository.findOne({
-      where: { id: itemId, userId },
-      relations: ['file'],
-    });
+    const historyItem = await this.historyRepository.findFile(
+      String(userId),
+      String(itemId),
+    );
 
     if (!historyItem || !historyItem.file) {
       this.logger.log(`No file found for user ${userId} and item ${itemId}`);
@@ -475,12 +437,12 @@ export class ConversionService implements OnModuleDestroy {
     }
 
     const filePath = historyItem.file.filePath;
-    if (!existsSync(filePath)) {
+    if (!(await this.fileStorage.exists(filePath))) {
       this.logger.log(`File not found for user ${userId} and item ${itemId}`);
       throw new NotFoundException('Physical file no longer exists on disk');
     }
 
-    const stream = createReadStream(filePath);
+    const stream = this.fileStorage.open(filePath);
     const result: { stream: StreamableFile; targetFormat: string } = {
       stream: new StreamableFile(stream),
       targetFormat: historyItem.targetFormat,
@@ -513,7 +475,7 @@ export class ConversionService implements OnModuleDestroy {
     const durationMs = Math.round(performance.now() - startTime);
 
     try {
-      await this.transformationHistoryRepository.save({
+      await this.historyRepository.save({
         type,
         sourceFormat,
         targetFormat,
@@ -521,7 +483,6 @@ export class ConversionService implements OnModuleDestroy {
         fileSize,
         durationMs,
         errorCode,
-        createdAt: new Date(),
         userId,
         fileId,
       });

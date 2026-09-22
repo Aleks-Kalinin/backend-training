@@ -6,7 +6,7 @@ import { LessThan, Repository } from 'typeorm';
 import { ConvertedFileEntity } from '../../infrastructure/entity/converted-file.entity';
 import { TransformationHistoryItemEntity } from '../../infrastructure/entity/transformation-history-item.entity';
 import { HISTORY_RETENTION_DAYS } from '../constants/history-retention-days';
-import { HistoryCleanupService } from '../history-cleanup.service';
+import { HistoryCleanupService } from '../../infrastructure/history-cleanup.service';
 
 jest.mock('@nestjs/schedule', () => ({
   Cron: () => () => {},
