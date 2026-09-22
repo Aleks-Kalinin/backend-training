@@ -1,8 +1,8 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Grant } from '../infrastructure/entities/grant.entity';
+import { Inject } from '@nestjs/common';
+import { GRANT_REPOSITORY } from './ports/rbac-repositories.port';
+import type { GrantRepository } from './ports/rbac-repositories.port';
 
 type PermissionMap = Record<string, string[] | '*'>;
 
@@ -14,8 +14,8 @@ export class RbacCacheService implements OnModuleInit {
   private cache!: RbacCache;
 
   constructor(
-    @InjectRepository(Grant)
-    private readonly grantRepository: Repository<Grant>,
+    @Inject(GRANT_REPOSITORY)
+    private readonly grantRepository: GrantRepository,
   ) {}
 
   async onModuleInit() {
@@ -30,9 +30,7 @@ export class RbacCacheService implements OnModuleInit {
 
   private async reloadCache(): Promise<void> {
     try {
-      const grants = await this.grantRepository.find({
-        relations: ['role', 'permission'],
-      });
+      const grants = await this.grantRepository.findForCache();
 
       const newCache: RbacCache = {};
 

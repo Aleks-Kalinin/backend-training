@@ -1,13 +1,15 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Test, TestingModule } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
 import { randomUUID } from 'node:crypto';
 import { Repository } from 'typeorm';
 import { Grant } from '../../infrastructure/entities/grant.entity';
 import { Permission } from '../../infrastructure/entities/permission.entity';
 import { AuditLogger } from '../../infrastructure/logging/logAudit';
 import { PermissionsService } from '../permissions.service';
+import { PERMISSION_REPOSITORY } from '../ports/rbac-repositories.port';
+import { RBAC_EVENTS } from '../ports/rbac-events.port';
+import { RBAC_AUDIT } from '../ports/audit.port';
 
 describe('PermissionsService', () => {
   let service: PermissionsService;
@@ -19,6 +21,9 @@ describe('PermissionsService', () => {
     permissionRepository = {
       find: jest.fn(),
       findOne: jest.fn(),
+      findAll: jest.fn(),
+      findById: jest.fn(),
+      findByName: jest.fn(),
       save: jest.fn(),
       remove: jest.fn(),
     } as unknown as jest.Mocked<Repository<Permission>>;
@@ -30,20 +35,24 @@ describe('PermissionsService', () => {
     auditLogger = {
       log: jest.fn(),
     } as unknown as jest.Mocked<AuditLogger>;
+    permissionRepository.findAll = permissionRepository.find as never;
+    permissionRepository.findById = permissionRepository.findOne as never;
+    permissionRepository.findByName = permissionRepository.findOne as never;
+    eventEmitter.changed = eventEmitter.emit as never;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PermissionsService,
         {
-          provide: getRepositoryToken(Permission),
+          provide: PERMISSION_REPOSITORY,
           useValue: permissionRepository,
         },
         {
-          provide: EventEmitter2,
+          provide: RBAC_EVENTS,
           useValue: eventEmitter,
         },
         {
-          provide: AuditLogger,
+          provide: RBAC_AUDIT,
           useValue: auditLogger,
         },
       ],
@@ -74,9 +83,7 @@ describe('PermissionsService', () => {
       const result = await service.findOne('p1', mockUserId);
 
       expect(result).toBe(mockPermission);
-      expect(permissionRepository.findOne).toHaveBeenCalledWith({
-        where: { id: 'p1' },
-      });
+      expect(permissionRepository.findById).toHaveBeenCalledWith('p1');
     });
 
     it('throws NotFoundException when permission does not exist', async () => {
@@ -123,7 +130,7 @@ describe('PermissionsService', () => {
 
       expect(result).toBe(savedPermission);
       expect(permissionRepository.save).toHaveBeenCalledWith(dto);
-      expect(eventEmitter.emit).toHaveBeenCalledWith('rbac.changed');
+      expect(eventEmitter.changed).toHaveBeenCalled();
     });
   });
 
@@ -161,7 +168,7 @@ describe('PermissionsService', () => {
       );
 
       expect(result).toBe(updatedPermission);
-      expect(eventEmitter.emit).toHaveBeenCalledWith('rbac.changed');
+      expect(eventEmitter.changed).toHaveBeenCalled();
     });
   });
 
@@ -205,7 +212,7 @@ describe('PermissionsService', () => {
       expect(permissionRepository.remove).toHaveBeenCalledWith(
         permissionWithoutGrants,
       );
-      expect(eventEmitter.emit).toHaveBeenCalledWith('rbac.changed');
+      expect(eventEmitter.changed).toHaveBeenCalled();
     });
   });
 });

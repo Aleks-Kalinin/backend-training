@@ -1,8 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Grant } from '../../infrastructure/entities/grant.entity';
 import { RbacCacheService } from '../rbac-cache.service';
+import { GRANT_REPOSITORY } from '../ports/rbac-repositories.port';
 
 describe('RbacCacheService', () => {
   let service: RbacCacheService;
@@ -11,13 +11,15 @@ describe('RbacCacheService', () => {
   beforeEach(async () => {
     grantRepository = {
       find: jest.fn(),
+      findForCache: jest.fn(),
     } as unknown as jest.Mocked<Repository<Grant>>;
+    grantRepository.findForCache = grantRepository.find as never;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         RbacCacheService,
         {
-          provide: getRepositoryToken(Grant),
+          provide: GRANT_REPOSITORY,
           useValue: grantRepository,
         },
       ],
@@ -45,9 +47,7 @@ describe('RbacCacheService', () => {
 
       await service.onModuleInit();
 
-      expect(grantRepository.find).toHaveBeenCalledWith({
-        relations: ['role', 'permission'],
-      });
+      expect(grantRepository.findForCache).toHaveBeenCalled();
 
       expect(service.hasPermission(['admin'], 'users', 'create')).toBe(true);
       expect(service.hasPermission(['admin'], 'users', 'delete')).toBe(false);
@@ -68,9 +68,7 @@ describe('RbacCacheService', () => {
 
       await service.handleRbacChanged();
 
-      expect(grantRepository.find).toHaveBeenCalledWith({
-        relations: ['role', 'permission'],
-      });
+      expect(grantRepository.findForCache).toHaveBeenCalled();
       expect(service.hasPermission(['admin'], 'reports', 'read')).toBe(true);
     });
 

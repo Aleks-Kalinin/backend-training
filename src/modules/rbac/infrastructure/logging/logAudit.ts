@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { UUID } from 'node:crypto';
+import type { RbacAudit } from '../../application/ports/audit.port';
 
 export interface AuditLogPayload {
   actorUserId: UUID;
@@ -9,7 +10,7 @@ export interface AuditLogPayload {
 }
 
 @Injectable()
-export class AuditLogger {
+export class AuditLogger implements RbacAudit {
   private readonly logger = new Logger('Audit');
 
   log(payload: AuditLogPayload): void {

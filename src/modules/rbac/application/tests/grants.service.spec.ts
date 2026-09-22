@@ -5,7 +5,6 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Test, TestingModule } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
 import { randomUUID } from 'node:crypto';
 import { Repository } from 'typeorm';
 import { Grant } from '../../infrastructure/entities/grant.entity';
@@ -13,6 +12,13 @@ import { Permission } from '../../infrastructure/entities/permission.entity';
 import { Role } from '../../infrastructure/entities/role.entity';
 import { AuditLogger } from '../../infrastructure/logging/logAudit';
 import { GrantsService } from '../grants.service';
+import {
+  GRANT_REPOSITORY,
+  PERMISSION_REPOSITORY,
+  ROLE_REPOSITORY,
+} from '../ports/rbac-repositories.port';
+import { RBAC_EVENTS } from '../ports/rbac-events.port';
+import { RBAC_AUDIT } from '../ports/audit.port';
 
 describe('GrantsService', () => {
   let service: GrantsService;
@@ -26,6 +32,10 @@ describe('GrantsService', () => {
     grantRepository = {
       find: jest.fn(),
       findOne: jest.fn(),
+      findAll: jest.fn(),
+      findById: jest.fn(),
+      findByRoleAndPermission: jest.fn(),
+      findForCache: jest.fn(),
       create: jest.fn((dto) => dto as Grant),
       save: jest.fn(),
       remove: jest.fn(),
@@ -33,10 +43,12 @@ describe('GrantsService', () => {
 
     roleRepository = {
       findOne: jest.fn(),
+      findById: jest.fn(),
     } as unknown as jest.Mocked<Repository<Role>>;
 
     permissionRepository = {
       findOne: jest.fn(),
+      findById: jest.fn(),
     } as unknown as jest.Mocked<Repository<Permission>>;
 
     eventEmitter = {
@@ -46,28 +58,34 @@ describe('GrantsService', () => {
     auditLogger = {
       log: jest.fn(),
     } as unknown as jest.Mocked<AuditLogger>;
+    grantRepository.findAll = grantRepository.find as never;
+    grantRepository.findById = grantRepository.findOne as never;
+    grantRepository.findByRoleAndPermission = grantRepository.findOne as never;
+    roleRepository.findById = roleRepository.findOne as never;
+    permissionRepository.findById = permissionRepository.findOne as never;
+    eventEmitter.changed = eventEmitter.emit as never;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         GrantsService,
         {
-          provide: getRepositoryToken(Grant),
+          provide: GRANT_REPOSITORY,
           useValue: grantRepository,
         },
         {
-          provide: getRepositoryToken(Role),
+          provide: ROLE_REPOSITORY,
           useValue: roleRepository,
         },
         {
-          provide: getRepositoryToken(Permission),
+          provide: PERMISSION_REPOSITORY,
           useValue: permissionRepository,
         },
         {
-          provide: EventEmitter2,
+          provide: RBAC_EVENTS,
           useValue: eventEmitter,
         },
         {
-          provide: AuditLogger,
+          provide: RBAC_AUDIT,
           useValue: auditLogger,
         },
       ],
@@ -86,9 +104,7 @@ describe('GrantsService', () => {
       const result = await service.findAll();
 
       expect(result).toBe(mockGrants);
-      expect(grantRepository.find).toHaveBeenCalledWith({
-        relations: ['role', 'permission'],
-      });
+      expect(grantRepository.findAll).toHaveBeenCalled();
     });
   });
 
@@ -100,10 +116,7 @@ describe('GrantsService', () => {
       const result = await service.findOne('grant-1', mockUserId);
 
       expect(result).toBe(mockGrant);
-      expect(grantRepository.findOne).toHaveBeenCalledWith({
-        where: { id: 'grant-1' },
-        relations: ['role', 'permission'],
-      });
+      expect(grantRepository.findById).toHaveBeenCalledWith('grant-1');
     });
 
     it('throws NotFoundException when grant does not exist', async () => {
@@ -214,7 +227,7 @@ describe('GrantsService', () => {
         permission,
         actions: ['read'],
       });
-      expect(eventEmitter.emit).toHaveBeenCalledWith('rbac.changed');
+      expect(eventEmitter.changed).toHaveBeenCalled();
     });
 
     it('sets actions to null when empty actions array is provided', async () => {
@@ -293,7 +306,7 @@ describe('GrantsService', () => {
       );
 
       expect(result).toBe(updatedGrant);
-      expect(eventEmitter.emit).toHaveBeenCalledWith('rbac.changed');
+      expect(eventEmitter.changed).toHaveBeenCalled();
     });
 
     it('sets actions to null when empty actions array or empty update is passed', async () => {
@@ -312,7 +325,7 @@ describe('GrantsService', () => {
       await service.update('grant-1', { actions: [] }, mockUserId);
 
       expect(existingGrant.actions).toBeNull();
-      expect(eventEmitter.emit).toHaveBeenCalledWith('rbac.changed');
+      expect(eventEmitter.changed).toHaveBeenCalled();
     });
   });
 
@@ -324,7 +337,7 @@ describe('GrantsService', () => {
       await service.remove('grant-1', mockUserId);
 
       expect(grantRepository.remove).toHaveBeenCalledWith(existingGrant);
-      expect(eventEmitter.emit).toHaveBeenCalledWith('rbac.changed');
+      expect(eventEmitter.changed).toHaveBeenCalled();
     });
   });
 });
