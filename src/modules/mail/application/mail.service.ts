@@ -1,44 +1,19 @@
-import {
-  Injectable,
-  InternalServerErrorException,
-  Logger,
-} from '@nestjs/common';
-import { Transporter, createTransport } from 'nodemailer';
-import SMTPTransport from 'nodemailer/lib/smtp-transport';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { MailDeliveryError } from '../domain/mail.errors';
+import { MAIL_TRANSPORT } from './ports/mail-transport.port';
+import type { MailTransport } from './ports/mail-transport.port';
 
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
-  private transporter: Transporter;
-
-  constructor() {
-    const host = process.env.SMTP_HOST;
-    const port = Number(process.env.SMTP_PORT);
-    const user = process.env.SMTP_USER;
-    const pass = process.env.SMTP_PASSWORD;
-    const secure = process.env.SMTP_SECURE === 'true';
-
-    if (!host || !user || !pass || !Number.isInteger(port)) {
-      throw new Error('SMTP configuration is incomplete or invalid');
-    }
-
-    const transportOptions: SMTPTransport.Options = {
-      host,
-      port,
-      secure,
-      auth: {
-        user,
-        pass,
-      },
-    };
-
-    this.transporter = createTransport(transportOptions);
-  }
+  constructor(
+    @Inject(MAIL_TRANSPORT)
+    private readonly transport: MailTransport,
+  ) {}
 
   async sendVerificationOtp(toEmail: string, otp: string): Promise<void> {
     try {
-      await this.transporter.sendMail({
-        from: process.env.SMTP_FROM || '"App Support" <no-reply@yourapp.com>',
+      await this.transport.send({
         to: toEmail,
         subject: 'Verify Your Email Address',
         html: `
@@ -54,9 +29,7 @@ export class MailService {
       this.logger.log(`Verification email sent to ${toEmail}`);
     } catch (error) {
       this.logger.error(`Failed to dispatch verification email: ${error}`);
-      throw new InternalServerErrorException(
-        'Failed to dispatch verification email',
-      );
+      throw new MailDeliveryError();
     }
   }
 }
