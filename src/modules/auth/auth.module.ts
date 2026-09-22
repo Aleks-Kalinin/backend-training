@@ -9,6 +9,10 @@ import { AuthService } from './application/auth.service';
 import { AuthGuard } from './auth.guard';
 import { AuthController } from './presentation/auth.controller';
 import { TOKEN_TTL } from './presentation/constants/auth.constants';
+import { AUTH_TOKEN_SERVICE } from './application/ports/token-service.port';
+import { PASSWORD_HASHER } from './application/ports/password-hasher.port';
+import { BcryptPasswordHasher } from './infrastructure/bcrypt-password-hasher';
+import { JwtTokenService } from './infrastructure/jwt-token.service';
 
 @Global()
 @Module({
@@ -26,7 +30,12 @@ import { TOKEN_TTL } from './presentation/constants/auth.constants';
       }),
     }),
   ],
-  providers: [AuthService, AuthGuard],
+  providers: [
+    AuthService,
+    AuthGuard,
+    { provide: AUTH_TOKEN_SERVICE, useClass: JwtTokenService },
+    { provide: PASSWORD_HASHER, useClass: BcryptPasswordHasher },
+  ],
   controllers: [AuthController],
   exports: [AuthService, AuthGuard, UsersModule],
 })

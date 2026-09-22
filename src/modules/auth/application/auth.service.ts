@@ -1,4 +1,3 @@
-import { ConfigService } from '@/core/config/config.service';
 import {
   ConflictException,
   ForbiddenException,
@@ -9,16 +8,18 @@ import {
   Logger,
   UnauthorizedException,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcrypt';
 import { MailService } from '../../mail/application/mail.service';
 import { SettingsService } from '../../settings/application/settings.service';
-import { SETTING_KEYS } from '../../settings/dto/settings.dto';
+import { SETTING_KEYS } from '../../settings/domain/settings.constants';
 import { UsersService } from '../../users/application/users.service';
 import { UserStatus } from '../../users/domain/user-status.enum';
 import { VerificationService } from '../../verification/application/verification.service';
-import { VerificationTokenType } from '../../verification/infrastructure/entity/verification-token.entity';
-import { TOKEN_TTL } from '../presentation/constants/auth.constants';
+import { VerificationTokenType } from '../../verification/domain/verification-token-type.enum';
+import { PASSWORD_HASHER } from './ports/password-hasher.port';
+import type { PasswordHasher } from './ports/password-hasher.port';
+import { AUTH_TOKEN_SERVICE } from './ports/token-service.port';
+import type { AuthTokenService } from './ports/token-service.port';
+import type { AuthTokenPayload, TokenPair } from '../domain/auth.types';
 
 export type SignUpResult =
   | {
@@ -31,16 +32,8 @@ export type SignUpResult =
       data: { message: string; verificationRequired: true; attemptId: string };
     };
 
-export type TokenPair = {
-  accessToken: string;
-  refreshToken: string;
-};
-
-export type JwtPayload = {
-  sub: string;
-  email: string;
-  roles: string[];
-};
+export type { TokenPair } from '../domain/auth.types';
+export type JwtPayload = AuthTokenPayload;
 
 @Injectable()
 export class AuthService {
@@ -48,29 +41,21 @@ export class AuthService {
 
   constructor(
     private usersService: UsersService,
-    private jwtService: JwtService,
+    @Inject(AUTH_TOKEN_SERVICE)
+    private tokenService: AuthTokenService,
     private verificationService: VerificationService,
     @Inject(forwardRef(() => SettingsService))
     private readonly settingsService: SettingsService,
     private mailService: MailService,
-    private configService: ConfigService,
+    @Inject(PASSWORD_HASHER)
+    private passwordHasher: PasswordHasher,
   ) {}
 
   /**
    * Generate an access + refresh token pair for a given user payload.
    */
   async generateTokenPair(payload: JwtPayload): Promise<TokenPair> {
-    const [accessToken, refreshToken] = await Promise.all([
-      this.jwtService.signAsync(payload, {
-        expiresIn: TOKEN_TTL.ACCESS_TOKEN_SECONDS,
-      }),
-      this.jwtService.signAsync(payload, {
-        secret: this.configService.get('JWT_REFRESH_SECRET'),
-        expiresIn: TOKEN_TTL.REFRESH_TOKEN_SECONDS,
-      }),
-    ]);
-
-    return { accessToken, refreshToken };
+    return this.tokenService.generateTokenPair(payload);
   }
 
   async signUp(email: string, pass: string): Promise<SignUpResult> {
@@ -80,7 +65,7 @@ export class AuthService {
       throw new ConflictException('Email is already registered');
     }
 
-    const hashedPassword = await bcrypt.hash(pass, 10);
+    const hashedPassword = await this.passwordHasher.hash(pass);
     const isVerificationRequired = await this.settingsService.isFeatureEnabled(
       SETTING_KEYS.REGISTRATION_VERIFICATION,
     );
@@ -153,7 +138,10 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const isPasswordValid = await bcrypt.compare(pass, user.password);
+    const isPasswordValid = await this.passwordHasher.compare(
+      pass,
+      user.password,
+    );
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');
     }
@@ -194,10 +182,7 @@ export class AuthService {
    */
   async refresh(refreshToken: string): Promise<{ tokens: TokenPair }> {
     try {
-      const payload = await this.jwtService.verifyAsync<JwtPayload>(
-        refreshToken,
-        { secret: this.configService.get('JWT_REFRESH_SECRET') },
-      );
+      const payload = await this.tokenService.verifyRefreshToken(refreshToken);
 
       const tokens = await this.generateTokenPair({
         sub: payload.sub,

@@ -13,7 +13,7 @@ export class TypeOrmUserRepository implements UserRepository {
   constructor(
     @InjectRepository(User)
     private readonly repository: Repository<User>,
-  ) { }
+  ) {}
 
   async findByEmail(email: string): Promise<DomainUser | null> {
     return this.repository.findOne({

@@ -1,10 +1,5 @@
-jest.mock('@nestjs/jwt', () => ({
-  JwtService: class JwtService {},
-}));
-
 import { SystemRole } from '@/modules/rbac/domain/system-role.enum';
 import { ConflictException, HttpStatus } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
 import { randomUUID } from 'node:crypto';
 import { MailService } from '../../../mail/application/mail.service';
@@ -13,16 +8,24 @@ import { SETTING_KEYS } from '../../../settings/dto/settings.dto';
 import { UsersService } from '../../../users/application/users.service';
 import { UserStatus } from '../../../users/domain/user-status.enum';
 import { VerificationService } from '../../../verification/application/verification.service';
-import { VerificationTokenType } from '../../../verification/infrastructure/entity/verification-token.entity';
-import { ConfigService } from '@/core/config/config.service';
+import { VerificationTokenType } from '../../../verification/domain/verification-token-type.enum';
 import { AuthService } from '../auth.service';
+import { AUTH_TOKEN_SERVICE } from '../ports/token-service.port';
+import { PASSWORD_HASHER } from '../ports/password-hasher.port';
 
 describe('AuthService', () => {
   let service: AuthService;
   let usersService: jest.Mocked<UsersService>;
   let settingsService: jest.Mocked<SettingsService>;
   let verificationService: jest.Mocked<VerificationService>;
-  let jwtService: jest.Mocked<JwtService>;
+  let tokenService: {
+    generateTokenPair: jest.Mock;
+    verifyRefreshToken: jest.Mock;
+  };
+  let passwordHasher: {
+    hash: jest.Mock;
+    compare: jest.Mock;
+  };
   let mailService: jest.Mocked<MailService>;
 
   beforeEach(async () => {
@@ -41,27 +44,31 @@ describe('AuthService', () => {
       verifyOtp: jest.fn(),
     } as unknown as jest.Mocked<VerificationService>;
 
-    jwtService = {
-      signAsync: jest.fn(),
-    } as unknown as jest.Mocked<JwtService>;
+    tokenService = {
+      generateTokenPair: jest.fn().mockResolvedValue({
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+      }),
+      verifyRefreshToken: jest.fn(),
+    };
+    passwordHasher = {
+      hash: jest.fn().mockResolvedValue('hashed'),
+      compare: jest.fn().mockResolvedValue(true),
+    };
 
     mailService = {
       sendVerificationOtp: jest.fn(),
     } as unknown as jest.Mocked<MailService>;
 
-    const configService = {
-      get: jest.fn().mockReturnValue('test-secret'),
-    };
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
         { provide: UsersService, useValue: usersService },
-        { provide: JwtService, useValue: jwtService },
+        { provide: AUTH_TOKEN_SERVICE, useValue: tokenService },
+        { provide: PASSWORD_HASHER, useValue: passwordHasher },
         { provide: VerificationService, useValue: verificationService },
         { provide: SettingsService, useValue: settingsService },
         { provide: MailService, useValue: mailService },
-        { provide: ConfigService, useValue: configService },
       ],
     }).compile();
 
@@ -89,8 +96,6 @@ describe('AuthService', () => {
       ],
       photo: null,
     });
-    jwtService.signAsync.mockResolvedValue('token');
-
     const result = await service.signUp(' NewUser@Example.COM ', 'Password123');
 
     expect(usersService.findOne).toHaveBeenCalledWith('newuser@example.com');
