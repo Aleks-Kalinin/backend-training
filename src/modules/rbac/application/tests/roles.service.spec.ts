@@ -1,13 +1,15 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Test, TestingModule } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
 import { randomUUID } from 'node:crypto';
 import { Repository } from 'typeorm';
 import { Grant } from '../../infrastructure/entities/grant.entity';
 import { Role } from '../../infrastructure/entities/role.entity';
 import { AuditLogger } from '../../infrastructure/logging/logAudit';
 import { RolesService } from '../roles.service';
+import { ROLE_REPOSITORY } from '../ports/rbac-repositories.port';
+import { RBAC_EVENTS } from '../ports/rbac-events.port';
+import { RBAC_AUDIT } from '../ports/audit.port';
 
 describe('RolesService', () => {
   let service: RolesService;
@@ -19,6 +21,9 @@ describe('RolesService', () => {
     roleRepository = {
       find: jest.fn(),
       findOne: jest.fn(),
+      findAll: jest.fn(),
+      findById: jest.fn(),
+      findByName: jest.fn(),
       create: jest.fn((dto) => dto as Role),
       save: jest.fn(),
       remove: jest.fn(),
@@ -31,20 +36,24 @@ describe('RolesService', () => {
     auditLogger = {
       log: jest.fn(),
     } as unknown as jest.Mocked<AuditLogger>;
+    roleRepository.findAll = roleRepository.find as never;
+    roleRepository.findById = roleRepository.findOne as never;
+    roleRepository.findByName = roleRepository.findOne as never;
+    eventEmitter.changed = eventEmitter.emit as never;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         RolesService,
         {
-          provide: getRepositoryToken(Role),
+          provide: ROLE_REPOSITORY,
           useValue: roleRepository,
         },
         {
-          provide: EventEmitter2,
+          provide: RBAC_EVENTS,
           useValue: eventEmitter,
         },
         {
-          provide: AuditLogger,
+          provide: RBAC_AUDIT,
           useValue: auditLogger,
         },
       ],
@@ -75,9 +84,7 @@ describe('RolesService', () => {
       const result = await service.findOne('r1');
 
       expect(result).toBe(mockRole);
-      expect(roleRepository.findOne).toHaveBeenCalledWith({
-        where: { id: 'r1' },
-      });
+      expect(roleRepository.findById).toHaveBeenCalledWith('r1');
     });
 
     it('throws NotFoundException when role does not exist', async () => {
@@ -118,7 +125,7 @@ describe('RolesService', () => {
       expect(result).toBe(createdRole);
       expect(roleRepository.create).toHaveBeenCalledWith(dto);
       expect(roleRepository.save).toHaveBeenCalledWith(dto);
-      expect(eventEmitter.emit).toHaveBeenCalledWith('rbac.changed');
+      expect(eventEmitter.changed).toHaveBeenCalled();
     });
   });
 
@@ -154,7 +161,7 @@ describe('RolesService', () => {
       );
 
       expect(result).toBe(updatedRole);
-      expect(eventEmitter.emit).toHaveBeenCalledWith('rbac.changed');
+      expect(eventEmitter.changed).toHaveBeenCalled();
     });
   });
 
@@ -196,7 +203,7 @@ describe('RolesService', () => {
       await service.remove('r1', mockUserId);
 
       expect(roleRepository.remove).toHaveBeenCalledWith(roleWithoutGrants);
-      expect(eventEmitter.emit).toHaveBeenCalledWith('rbac.changed');
+      expect(eventEmitter.changed).toHaveBeenCalled();
     });
   });
 });

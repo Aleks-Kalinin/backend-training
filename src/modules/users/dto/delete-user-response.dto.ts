@@ -1,8 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  DeletionExecutionMode,
-  DeletionJobStatus,
-} from '../infrastructure/entity/user-deletion-job.entity';
+import { DeletionExecutionMode, DeletionJobStatus } from '../domain/deletion';
 
 export class DeleteUserResponseDto {
   @ApiProperty({

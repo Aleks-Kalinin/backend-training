@@ -15,6 +15,9 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { type UUID } from 'node:crypto';
 import { Repository } from 'typeorm';
 import { UserStatus } from '../../domain/user-status.enum';
+import { USER_DELETION_JOB_REPOSITORY } from '../ports/deletion-job-repository.port';
+import { USER_REPOSITORY } from '../ports/user-repository.port';
+import { USER_ROLE_REPOSITORY } from '../ports/role-repository.port';
 import { ConfirmEmailChangeDto } from '../../dto/confirm-email-change.dto';
 import { CreateUserDto } from '../../dto/create-user.dto';
 import { DeleteUserDto } from '../../dto/delete-user.dto';
@@ -31,9 +34,9 @@ import { UsersService } from '../users.service';
 
 describe('UsersService', () => {
   let service: UsersService;
-  let usersRepository: jest.Mocked<Repository<User>>;
-  let userDeletionJobRepository: jest.Mocked<Repository<UserDeletionJob>>;
-  let roleRepository: jest.Mocked<Repository<Role>>;
+  let usersRepository: any;
+  let userDeletionJobRepository: any;
+  let roleRepository: any;
   let verificationService: jest.Mocked<VerificationService>;
   let mailService: jest.Mocked<MailService>;
   let eventEmitter: jest.Mocked<EventEmitter2>;
@@ -73,6 +76,9 @@ describe('UsersService', () => {
     usersRepository = {
       create: jest.fn((entity) => ({ ...entity }) as User),
       findOne: jest.fn(),
+      findByEmail: jest.fn(),
+      findById: jest.fn(),
+      findMany: jest.fn(),
       save: jest.fn((entity) => Promise.resolve(entity as User)),
       update: jest.fn(),
       remove: jest.fn((entity) => Promise.resolve(entity as User)),
@@ -82,12 +88,20 @@ describe('UsersService', () => {
     userDeletionJobRepository = {
       create: jest.fn((entity) => ({ ...entity }) as UserDeletionJob),
       findOne: jest.fn(),
+      findLatestByUserId: jest.fn(),
       save: jest.fn((entity) => Promise.resolve(entity as UserDeletionJob)),
     } as unknown as jest.Mocked<Repository<UserDeletionJob>>;
 
     roleRepository = {
       findOne: jest.fn(),
+      findDefaultRole: jest.fn(),
     } as unknown as jest.Mocked<Repository<Role>>;
+
+    usersRepository.findByEmail = usersRepository.findOne as never;
+    usersRepository.findById = usersRepository.findOne as never;
+    userDeletionJobRepository.findLatestByUserId =
+      userDeletionJobRepository.findOne as never;
+    roleRepository.findDefaultRole = roleRepository.findOne as never;
 
     verificationService = {
       createVerificationRecord: jest.fn(),
@@ -105,12 +119,12 @@ describe('UsersService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         UsersService,
-        { provide: getRepositoryToken(User), useValue: usersRepository },
+        { provide: USER_REPOSITORY, useValue: usersRepository },
         {
-          provide: getRepositoryToken(UserDeletionJob),
+          provide: USER_DELETION_JOB_REPOSITORY,
           useValue: userDeletionJobRepository,
         },
-        { provide: getRepositoryToken(Role), useValue: roleRepository },
+        { provide: USER_ROLE_REPOSITORY, useValue: roleRepository },
         { provide: VerificationService, useValue: verificationService },
         { provide: MailService, useValue: mailService },
         { provide: EventEmitter2, useValue: eventEmitter },
@@ -328,10 +342,9 @@ describe('UsersService', () => {
 
       const result = await service.findOne(' TEST@EXAMPLE.COM ');
 
-      expect(usersRepository.findOne).toHaveBeenCalledWith({
-        where: { email: 'test@example.com' },
-        relations: ['roles'],
-      });
+      expect(usersRepository.findByEmail).toHaveBeenCalledWith(
+        ' TEST@EXAMPLE.COM ',
+      );
       expect(result).toEqual(mockUser);
     });
   });
@@ -342,9 +355,7 @@ describe('UsersService', () => {
 
       const result = await service.getUser(mockUser.userId);
 
-      expect(usersRepository.findOne).toHaveBeenCalledWith({
-        where: { userId: mockUser.userId },
-      });
+      expect(usersRepository.findById).toHaveBeenCalledWith(mockUser.userId);
       expect(result).toEqual(mockUser);
     });
   });
@@ -374,6 +385,7 @@ describe('UsersService', () => {
         password: 'password123',
         status: UserStatus.ACTIVE,
         isVerified: true,
+        photo: null,
       });
       expect(usersRepository.save).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -462,14 +474,7 @@ describe('UsersService', () => {
 
   describe('getUsers', () => {
     it('applies query filters, sorting, and pagination limit', async () => {
-      const mockQueryBuilder: any = {
-        andWhere: jest.fn().mockReturnThis(),
-        orderBy: jest.fn().mockReturnThis(),
-        take: jest.fn().mockReturnThis(),
-        getMany: jest.fn().mockResolvedValue([mockUser]),
-      };
-
-      usersRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder);
+      usersRepository.findMany.mockResolvedValue([mockUser]);
 
       const queryDto: GetUsersQueryDto = {
         limit: 10,
@@ -481,12 +486,13 @@ describe('UsersService', () => {
 
       const result = await service.getUsers(queryDto);
 
-      expect(usersRepository.createQueryBuilder).toHaveBeenCalledWith('user');
-      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
-        'user.status = :status',
-        { status: UserStatus.ACTIVE },
-      );
-      expect(mockQueryBuilder.take).toHaveBeenCalledWith(10);
+      expect(usersRepository.findMany).toHaveBeenCalledWith({
+        limit: 10,
+        q: 'test',
+        status: UserStatus.ACTIVE,
+        sort: 'created_at',
+        order: 'desc',
+      });
       expect(result).toEqual([mockUser]);
     });
   });

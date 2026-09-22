@@ -1,12 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import {
-  DeletionJobStatus,
-  UserDeletionJob,
-} from '../../infrastructure/entity/user-deletion-job.entity';
-import { User } from '../../infrastructure/entity/user.entity';
+import { DeletionJobStatus } from '../../domain/deletion';
+import { USER_DELETION_JOB_REPOSITORY } from '../ports/deletion-job-repository.port';
+import type { UserDeletionJobRepository } from '../ports/deletion-job-repository.port';
+import { USER_REPOSITORY } from '../ports/user-repository.port';
+import type { UserRepository } from '../ports/user-repository.port';
 
 export interface UserDeletionEventPayload {
   jobId: string;
@@ -18,24 +16,18 @@ export class UserDeletionListener {
   private readonly logger = new Logger(UserDeletionListener.name);
 
   constructor(
-    @InjectRepository(User)
-    private readonly usersRepository: Repository<User>,
-    @InjectRepository(UserDeletionJob)
-    private readonly userDeletionJobRepository: Repository<UserDeletionJob>,
+    @Inject(USER_REPOSITORY)
+    private readonly usersRepository: UserRepository,
+    @Inject(USER_DELETION_JOB_REPOSITORY)
+    private readonly userDeletionJobRepository: UserDeletionJobRepository,
   ) {}
 
   @OnEvent('user.delete.request', { async: true })
   async handleUserSoftDeleted(payload: UserDeletionEventPayload) {
     const { jobId, userId } = payload;
 
-    const job = await this.userDeletionJobRepository.findOne({
-      where: {
-        id: jobId,
-      },
-    });
-    const user = await this.usersRepository.findOne({
-      where: { userId },
-    });
+    const job = await this.userDeletionJobRepository.findLatestByUserId(userId);
+    const user = await this.usersRepository.findById(userId);
 
     if (!job || !user) {
       this.logger.error(`Job or User not found for deletion event`);

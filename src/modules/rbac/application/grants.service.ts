@@ -1,4 +1,3 @@
-import { AuditLogger } from '@/modules/rbac/infrastructure/logging/logAudit';
 import {
   BadRequestException,
   ConflictException,
@@ -7,39 +6,48 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
-import { InjectRepository } from '@nestjs/typeorm';
+import { Inject } from '@nestjs/common';
 import { UUID } from 'node:crypto';
-import { Repository } from 'typeorm';
 import { CreateGrantDto } from '../dto/create-grant.dto';
 import { UpdateGrantDto } from '../dto/update-grant.dto';
-import { Grant } from '../infrastructure/entities/grant.entity';
-import { Permission } from '../infrastructure/entities/permission.entity';
-import { Role } from '../infrastructure/entities/role.entity';
+import {
+  GRANT_REPOSITORY,
+  PERMISSION_REPOSITORY,
+  ROLE_REPOSITORY,
+} from './ports/rbac-repositories.port';
+import type {
+  GrantRepository,
+  PermissionRepository,
+  RoleRepository,
+} from './ports/rbac-repositories.port';
+import { RBAC_EVENTS } from './ports/rbac-events.port';
+import type { RbacEvents } from './ports/rbac-events.port';
+import { RBAC_AUDIT } from './ports/audit.port';
+import type { RbacAudit } from './ports/audit.port';
+import type {
+  RbacGrant as Grant,
+  RbacPermission as Permission,
+  RbacRole as Role,
+} from '../domain/rbac.models';
 
 @Injectable()
 export class GrantsService {
   private readonly logger = new Logger(GrantsService.name);
   constructor(
-    @InjectRepository(Grant)
-    private readonly grantRepository: Repository<Grant>,
-    @InjectRepository(Role)
-    private readonly roleRepository: Repository<Role>,
-    @InjectRepository(Permission)
-    private readonly permissionRepository: Repository<Permission>,
-    private readonly eventEmitter: EventEmitter2,
-    private readonly auditLogger: AuditLogger,
+    @Inject(GRANT_REPOSITORY) private readonly grantRepository: GrantRepository,
+    @Inject(ROLE_REPOSITORY) private readonly roleRepository: RoleRepository,
+    @Inject(PERMISSION_REPOSITORY)
+    private readonly permissionRepository: PermissionRepository,
+    @Inject(RBAC_EVENTS) private readonly eventEmitter: RbacEvents,
+    @Inject(RBAC_AUDIT) private readonly auditLogger: RbacAudit,
   ) {}
 
   async findAll(): Promise<Grant[]> {
-    return this.grantRepository.find({ relations: ['role', 'permission'] });
+    return this.grantRepository.findAll();
   }
 
   async findOne(id: string, actorUserId: UUID): Promise<Grant> {
-    const grant = await this.grantRepository.findOne({
-      where: { id },
-      relations: ['role', 'permission'],
-    });
+    const grant = await this.grantRepository.findById(id);
 
     if (!grant) {
       this.auditLogger.log({
@@ -60,7 +68,7 @@ export class GrantsService {
   ): Promise<Grant> {
     const { roleId, permissionId, actions } = createGrantDto;
 
-    const role = await this.roleRepository.findOne({ where: { id: roleId } });
+    const role = await this.roleRepository.findById(roleId);
     if (!role) {
       this.auditLogger.log({
         actorUserId,
@@ -71,9 +79,7 @@ export class GrantsService {
       throw new NotFoundException(`Role with ID ${roleId} not found`);
     }
 
-    const permission = await this.permissionRepository.findOne({
-      where: { id: permissionId },
-    });
+    const permission = await this.permissionRepository.findById(permissionId);
     if (!permission) {
       this.auditLogger.log({
         actorUserId,
@@ -87,12 +93,10 @@ export class GrantsService {
     }
 
     // Check for duplicate Grant (Role + Permission)
-    const existingGrant = await this.grantRepository.findOne({
-      where: {
-        role: { id: roleId },
-        permission: { id: permissionId },
-      },
-    });
+    const existingGrant = await this.grantRepository.findByRoleAndPermission(
+      roleId,
+      permissionId,
+    );
 
     if (existingGrant) {
       this.auditLogger.log({
@@ -131,7 +135,7 @@ export class GrantsService {
     });
 
     const savedGrant = await this.grantRepository.save(grant);
-    this.eventEmitter.emit('rbac.changed');
+    this.eventEmitter.changed();
     this.auditLogger.log({
       actorUserId,
       operation: 'create',
@@ -171,7 +175,7 @@ export class GrantsService {
     }
 
     const updatedGrant = await this.grantRepository.save(grant);
-    this.eventEmitter.emit('rbac.changed');
+    this.eventEmitter.changed();
     this.auditLogger.log({
       actorUserId,
       operation: 'update',
@@ -185,7 +189,7 @@ export class GrantsService {
   async remove(id: string, actorUserId: UUID): Promise<void> {
     const grant = await this.findOne(id, actorUserId);
     await this.grantRepository.remove(grant);
-    this.eventEmitter.emit('rbac.changed');
+    this.eventEmitter.changed();
     this.auditLogger.log({
       actorUserId,
       operation: 'delete',

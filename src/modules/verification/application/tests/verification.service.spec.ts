@@ -8,43 +8,70 @@ import {
 } from '@jest/globals';
 import { HttpException, UnprocessableEntityException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
-import { Repository } from 'typeorm';
+import { VerificationTokenType } from '../../domain/verification-token-type.enum';
+import type { VerificationToken } from '../../domain/verification-token.models';
 import {
-  VerificationToken,
-  VerificationTokenType,
-} from '../../infrastructure/entity/verification-token.entity';
+  VERIFICATION_PASSWORD_HASHER,
+  VerificationPasswordHasher,
+} from '../ports/password-hasher.port';
+import {
+  VERIFICATION_REPOSITORY,
+  VerificationRepository,
+} from '../ports/verification-repository.port';
+import {
+  VERIFICATION_RUNTIME_ENVIRONMENT,
+  VerificationRuntimeEnvironment,
+} from '../ports/runtime-environment.port';
 import { VerificationService } from './../verification.service';
 
 describe('VerificationService', () => {
   let service: VerificationService;
-  let repository: jest.Mocked<Repository<VerificationToken>>;
+  let repository: jest.Mocked<VerificationRepository>;
+  let passwordHasher: jest.Mocked<VerificationPasswordHasher>;
+  let runtimeEnvironment: jest.Mocked<VerificationRuntimeEnvironment>;
   const originalNodeEnv = process.env.NODE_ENV;
 
   beforeEach(async () => {
-    const save = jest.fn(
-      async (entity: VerificationToken): Promise<VerificationToken> => ({
-        ...entity,
-        verificationTokenId: 'attempt-id',
-        attempts: 0,
-        consumedAt: null,
-      }),
-    );
-
     repository = {
-      create: jest.fn((entity) => entity as VerificationToken),
-      findOne: jest.fn(),
-      save,
-      update: jest.fn(),
-    } as unknown as jest.Mocked<Repository<VerificationToken>>;
+      consumeActiveForUser: jest.fn(),
+      create: jest.fn(
+        async (entity): Promise<VerificationToken> => ({
+          ...entity,
+          verificationTokenId: 'attempt-id',
+          attempts: 0,
+          consumedAt: null,
+        }),
+      ),
+      findActive: jest.fn(),
+      save: jest.fn(
+        async (entity: VerificationToken): Promise<VerificationToken> => ({
+          ...entity,
+        }),
+      ),
+    };
+    passwordHasher = {
+      hash: jest.fn((value) => bcrypt.hash(value, 10)),
+      compare: jest.fn((value, hash) => bcrypt.compare(value, hash)),
+    };
+    runtimeEnvironment = {
+      isProduction: jest.fn(() => false),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         VerificationService,
         {
-          provide: getRepositoryToken(VerificationToken),
+          provide: VERIFICATION_REPOSITORY,
           useValue: repository,
+        },
+        {
+          provide: VERIFICATION_PASSWORD_HASHER,
+          useValue: passwordHasher,
+        },
+        {
+          provide: VERIFICATION_RUNTIME_ENVIRONMENT,
+          useValue: runtimeEnvironment,
         },
       ],
     }).compile();
@@ -65,7 +92,7 @@ describe('VerificationService', () => {
 
     expect(result.attemptId).toBe('attempt-id');
     expect(result.rawOtp).toMatch(/^\d{6}$/);
-    expect(repository.update).toHaveBeenCalled();
+    expect(repository.consumeActiveForUser).toHaveBeenCalled();
     expect(repository.create).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: 'user-id',
@@ -74,7 +101,7 @@ describe('VerificationService', () => {
       }),
     );
 
-    const created = repository.create.mock.calls[0][0] as VerificationToken;
+    const created = repository.create.mock.calls[0][0];
     expect(created.tokenHash).not.toBe(result.rawOtp);
     await expect(
       bcrypt.compare(result.rawOtp, created.tokenHash),
@@ -102,7 +129,7 @@ describe('VerificationService', () => {
 
   it('consumes a valid OTP and returns the user id', async () => {
     const tokenHash = await bcrypt.hash('123456', 10);
-    repository.findOne.mockResolvedValue({
+    repository.findActive.mockResolvedValue({
       verificationTokenId: 'attempt-id',
       userId: 'user-id',
       type: VerificationTokenType.REGISTRATION,
@@ -112,7 +139,7 @@ describe('VerificationService', () => {
       consumedAt: null,
       createdAt: new Date(),
       updatedAt: new Date(),
-    } as VerificationToken);
+    });
 
     const result = await service.verifyOtp('attempt-id', '123456');
     expect(result.userId).toBe('user-id');
@@ -123,7 +150,7 @@ describe('VerificationService', () => {
 
   it('increments attempts for invalid OTP and blocks after the fifth attempt', async () => {
     const tokenHash = await bcrypt.hash('123456', 10);
-    repository.findOne.mockResolvedValue({
+    repository.findActive.mockResolvedValue({
       verificationTokenId: 'attempt-id',
       userId: 'user-id',
       type: VerificationTokenType.REGISTRATION,
@@ -133,7 +160,7 @@ describe('VerificationService', () => {
       consumedAt: null,
       createdAt: new Date(),
       updatedAt: new Date(),
-    } as VerificationToken);
+    });
 
     await expect(
       service.verifyOtp('attempt-id', '654321'),
@@ -144,7 +171,7 @@ describe('VerificationService', () => {
   });
 
   it('rejects missing or expired OTP attempts with 422', async () => {
-    repository.findOne.mockResolvedValue(null);
+    repository.findActive.mockResolvedValue(null);
 
     await expect(
       service.verifyOtp('attempt-id', '123456'),

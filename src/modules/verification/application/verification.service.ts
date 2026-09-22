@@ -1,18 +1,26 @@
 import {
+  Inject,
   HttpException,
   HttpStatus,
   Injectable,
   Logger,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
-import { IsNull, Repository } from 'typeorm';
+import { VerificationTokenType } from '../domain/verification-token-type.enum';
+import type { VerificationToken } from '../domain/verification-token.models';
 import {
-  VerificationToken,
-  VerificationTokenType,
-} from '../infrastructure/entity/verification-token.entity';
+  VERIFICATION_REPOSITORY,
+  type VerificationRepository,
+} from './ports/verification-repository.port';
+import {
+  VERIFICATION_PASSWORD_HASHER,
+  type VerificationPasswordHasher,
+} from './ports/password-hasher.port';
+import {
+  VERIFICATION_RUNTIME_ENVIRONMENT,
+  type VerificationRuntimeEnvironment,
+} from './ports/runtime-environment.port';
 
 @Injectable()
 export class VerificationService {
@@ -21,8 +29,12 @@ export class VerificationService {
   private readonly MAX_ATTEMPTS = 5;
 
   constructor(
-    @InjectRepository(VerificationToken)
-    private readonly verificationTokenRepository: Repository<VerificationToken>,
+    @Inject(VERIFICATION_REPOSITORY)
+    private readonly verificationRepository: VerificationRepository,
+    @Inject(VERIFICATION_PASSWORD_HASHER)
+    private readonly passwordHasher: VerificationPasswordHasher,
+    @Inject(VERIFICATION_RUNTIME_ENVIRONMENT)
+    private readonly runtimeEnvironment: VerificationRuntimeEnvironment,
   ) {}
 
   generateOtp(): string {
@@ -35,26 +47,25 @@ export class VerificationService {
     targetEmail?: string,
   ) {
     const otp = this.generateOtp();
-    const tokenHash = await bcrypt.hash(otp, 10);
+    const tokenHash = await this.passwordHasher.hash(otp);
     const expiresAt = new Date(Date.now() + this.OTP_TTL_MINUTES * 60 * 1000);
 
-    await this.verificationTokenRepository.update(
-      { userId, type, consumedAt: IsNull() },
-      { consumedAt: new Date() },
+    await this.verificationRepository.consumeActiveForUser(
+      userId,
+      type,
+      new Date(),
     );
 
-    const record = await this.verificationTokenRepository.save(
-      this.verificationTokenRepository.create({
-        userId,
-        type,
-        targetEmail,
-        tokenHash,
-        expiresAt,
-      }),
-    );
+    const record = await this.verificationRepository.create({
+      userId,
+      type,
+      targetEmail,
+      tokenHash,
+      expiresAt,
+    });
 
     this.logger.log(`Created ${type} verification attempt for user ${userId}`);
-    if (process.env.NODE_ENV !== 'production') {
+    if (!this.runtimeEnvironment.isProduction()) {
       this.logger.debug(`Development ${type} OTP for user ${userId}: ${otp}`);
     }
 
@@ -66,13 +77,10 @@ export class VerificationService {
     inputOtp: string,
     expectedType: VerificationTokenType = VerificationTokenType.REGISTRATION,
   ): Promise<VerificationToken> {
-    const record = await this.verificationTokenRepository.findOne({
-      where: {
-        verificationTokenId: attemptId,
-        type: expectedType,
-        consumedAt: IsNull(),
-      },
-    });
+    const record = await this.verificationRepository.findActive(
+      attemptId,
+      expectedType,
+    );
 
     if (!record || new Date() > record.expiresAt) {
       throw new UnprocessableEntityException(
@@ -87,10 +95,13 @@ export class VerificationService {
       );
     }
 
-    const isValid = await bcrypt.compare(inputOtp.trim(), record.tokenHash);
+    const isValid = await this.passwordHasher.compare(
+      inputOtp.trim(),
+      record.tokenHash,
+    );
     if (!isValid) {
       record.attempts += 1;
-      await this.verificationTokenRepository.save(record);
+      await this.verificationRepository.save(record);
 
       if (record.attempts >= this.MAX_ATTEMPTS) {
         throw new HttpException(
@@ -104,7 +115,7 @@ export class VerificationService {
     }
 
     record.consumedAt = new Date();
-    await this.verificationTokenRepository.save(record);
+    await this.verificationRepository.save(record);
 
     return record;
   }

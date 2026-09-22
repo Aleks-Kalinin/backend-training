@@ -1,4 +1,3 @@
-import { AuditLogger } from '@/modules/rbac/infrastructure/logging/logAudit';
 import {
   ConflictException,
   HttpStatus,
@@ -6,32 +5,34 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
-import { InjectRepository } from '@nestjs/typeorm';
+import { Inject } from '@nestjs/common';
 import { UUID } from 'node:crypto';
-import { Repository } from 'typeorm';
 import { CreatePermissionDto } from '../dto/create-permission.dto';
 import { UpdatePermissionDto } from '../dto/update-permission.dto';
-import { Permission } from '../infrastructure/entities/permission.entity';
+import { PERMISSION_REPOSITORY } from './ports/rbac-repositories.port';
+import type { PermissionRepository } from './ports/rbac-repositories.port';
+import { RBAC_EVENTS } from './ports/rbac-events.port';
+import type { RbacEvents } from './ports/rbac-events.port';
+import { RBAC_AUDIT } from './ports/audit.port';
+import type { RbacAudit } from './ports/audit.port';
+import type { RbacPermission as Permission } from '../domain/rbac.models';
 
 @Injectable()
 export class PermissionsService {
   private readonly logger = new Logger(PermissionsService.name);
   constructor(
-    @InjectRepository(Permission)
-    private readonly permissionRepository: Repository<Permission>,
-    private readonly eventEmitter: EventEmitter2,
-    private readonly auditLogger: AuditLogger,
+    @Inject(PERMISSION_REPOSITORY)
+    private readonly permissionRepository: PermissionRepository,
+    @Inject(RBAC_EVENTS) private readonly eventEmitter: RbacEvents,
+    @Inject(RBAC_AUDIT) private readonly auditLogger: RbacAudit,
   ) {}
 
   async findAll(): Promise<Permission[]> {
-    return this.permissionRepository.find();
+    return this.permissionRepository.findAll();
   }
 
   async findOne(id: string, actorUserId: UUID): Promise<Permission> {
-    const permission = await this.permissionRepository.findOne({
-      where: { id },
-    });
+    const permission = await this.permissionRepository.findById(id);
     if (!permission) {
       this.auditLogger.log({
         actorUserId,
@@ -48,9 +49,9 @@ export class PermissionsService {
     createPermissionDto: CreatePermissionDto,
     actorUserId: UUID,
   ): Promise<Permission> {
-    const existingPermission = await this.permissionRepository.findOne({
-      where: { name: createPermissionDto.name },
-    });
+    const existingPermission = await this.permissionRepository.findByName(
+      createPermissionDto.name,
+    );
 
     if (existingPermission) {
       this.auditLogger.log({
@@ -68,7 +69,7 @@ export class PermissionsService {
     const createdPermission =
       await this.permissionRepository.save(createPermissionDto);
 
-    this.eventEmitter.emit('rbac.changed');
+    this.eventEmitter.changed();
 
     this.auditLogger.log({
       actorUserId,
@@ -91,9 +92,9 @@ export class PermissionsService {
       updatePermissionDto.name &&
       updatePermissionDto.name !== permission.name
     ) {
-      const existingPermission = await this.permissionRepository.findOne({
-        where: { name: updatePermissionDto.name },
-      });
+      const existingPermission = await this.permissionRepository.findByName(
+        updatePermissionDto.name,
+      );
 
       if (existingPermission) {
         this.auditLogger.log({
@@ -111,7 +112,7 @@ export class PermissionsService {
     Object.assign(permission, updatePermissionDto);
     const updatedPermission = await this.permissionRepository.save(permission);
 
-    this.eventEmitter.emit('rbac.changed');
+    this.eventEmitter.changed();
 
     this.auditLogger.log({
       actorUserId,
@@ -124,10 +125,7 @@ export class PermissionsService {
   }
 
   async remove(id: string, actorUserId): Promise<void> {
-    const permission = await this.permissionRepository.findOne({
-      where: { id },
-      relations: ['grants'],
-    });
+    const permission = await this.permissionRepository.findById(id, true);
 
     if (!permission) {
       this.auditLogger.log({
@@ -155,7 +153,7 @@ export class PermissionsService {
 
     await this.permissionRepository.remove(permission);
 
-    this.eventEmitter.emit('rbac.changed');
+    this.eventEmitter.changed();
 
     this.auditLogger.log({
       actorUserId,
