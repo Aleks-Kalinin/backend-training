@@ -1,7 +1,6 @@
 import {
   ConflictException,
   ForbiddenException,
-  forwardRef,
   HttpStatus,
   Inject,
   Injectable,
@@ -44,7 +43,6 @@ export class AuthService {
     @Inject(AUTH_TOKEN_SERVICE)
     private tokenService: AuthTokenService,
     private verificationService: VerificationService,
-    @Inject(forwardRef(() => SettingsService))
     private readonly settingsService: SettingsService,
     private mailService: MailService,
     @Inject(PASSWORD_HASHER)
