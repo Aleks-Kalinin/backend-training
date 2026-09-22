@@ -1,15 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsBoolean, IsOptional } from 'class-validator';
 import { SETTING_KEYS, SettingKey } from '../domain/settings.constants';
+import type { VerificationSettings } from '../domain/settings.models';
 
 export { SETTING_KEYS };
 export type { SettingKey };
-
-export interface VerificationSettings {
-  registrationVerificationEnabled: boolean;
-  passwordResetVerificationEnabled: boolean;
-  loginVerificationEnabled: boolean;
-}
+export type { VerificationSettings };
 
 export class VerificationSettingsResponseDto implements VerificationSettings {
   @ApiProperty({

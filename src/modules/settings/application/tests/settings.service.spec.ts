@@ -1,27 +1,27 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
-import { SETTING_KEYS } from '../../dto/settings.dto';
-import { SystemSetting } from '../../infrastructure/entity/system-setting.entity';
+import { SETTING_KEYS } from '../../domain/settings.constants';
+import {
+  SETTINGS_REPOSITORY,
+  SettingsRepository,
+} from '../ports/settings-repository.port';
 import { SettingsService } from './../settings.service';
 
 describe('SettingsService', () => {
   let service: SettingsService;
-  let repository: jest.Mocked<Repository<SystemSetting>>;
+  let repository: jest.Mocked<SettingsRepository>;
 
   beforeEach(async () => {
     repository = {
-      findOne: jest.fn(),
-      find: jest.fn(),
-      create: jest.fn((entity) => entity as SystemSetting),
+      findByKey: jest.fn(),
+      findByKeys: jest.fn(),
       save: jest.fn(),
-    } as unknown as jest.Mocked<Repository<SystemSetting>>;
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SettingsService,
         {
-          provide: getRepositoryToken(SystemSetting),
+          provide: SETTINGS_REPOSITORY,
           useValue: repository,
         },
       ],
@@ -32,24 +32,23 @@ describe('SettingsService', () => {
 
   describe('isFeatureEnabled', () => {
     it('returns false when setting record does not exist', async () => {
-      repository.findOne.mockResolvedValue(null);
+      repository.findByKey.mockResolvedValue(null);
 
       const result = await service.isFeatureEnabled(
         SETTING_KEYS.REGISTRATION_VERIFICATION,
       );
 
       expect(result).toBe(false);
-      expect(repository.findOne).toHaveBeenCalledWith({
-        where: { key: SETTING_KEYS.REGISTRATION_VERIFICATION },
-      });
+      expect(repository.findByKey).toHaveBeenCalledWith(
+        SETTING_KEYS.REGISTRATION_VERIFICATION,
+      );
     });
 
     it('returns boolean value directly when setting value is boolean', async () => {
-      repository.findOne.mockResolvedValue({
-        id: 'setting-1',
+      repository.findByKey.mockResolvedValue({
         key: SETTING_KEYS.REGISTRATION_VERIFICATION,
         value: true,
-      } as SystemSetting);
+      });
 
       const result = await service.isFeatureEnabled(
         SETTING_KEYS.REGISTRATION_VERIFICATION,
@@ -59,11 +58,10 @@ describe('SettingsService', () => {
     });
 
     it('returns false when boolean setting value is false', async () => {
-      repository.findOne.mockResolvedValue({
-        id: 'setting-1',
+      repository.findByKey.mockResolvedValue({
         key: SETTING_KEYS.REGISTRATION_VERIFICATION,
         value: false,
-      } as SystemSetting);
+      });
 
       const result = await service.isFeatureEnabled(
         SETTING_KEYS.REGISTRATION_VERIFICATION,
@@ -73,11 +71,10 @@ describe('SettingsService', () => {
     });
 
     it('extracts boolean from object value containing enabled property', async () => {
-      repository.findOne.mockResolvedValue({
-        id: 'setting-1',
+      repository.findByKey.mockResolvedValue({
         key: SETTING_KEYS.LOGIN_VERIFICATION,
         value: { enabled: true },
-      } as SystemSetting);
+      });
 
       const result = await service.isFeatureEnabled(
         SETTING_KEYS.LOGIN_VERIFICATION,
@@ -87,11 +84,10 @@ describe('SettingsService', () => {
     });
 
     it('returns false when object value does not have enabled property', async () => {
-      repository.findOne.mockResolvedValue({
-        id: 'setting-1',
+      repository.findByKey.mockResolvedValue({
         key: SETTING_KEYS.LOGIN_VERIFICATION,
         value: { otherProp: 'test' },
-      } as SystemSetting);
+      });
 
       const result = await service.isFeatureEnabled(
         SETTING_KEYS.LOGIN_VERIFICATION,
@@ -103,7 +99,7 @@ describe('SettingsService', () => {
 
   describe('getVerificationSettings', () => {
     it('returns default fallback values when no DB records exist', async () => {
-      repository.find.mockResolvedValue([]);
+      repository.findByKeys.mockResolvedValue([]);
 
       const result = await service.getVerificationSettings();
 
@@ -113,19 +109,15 @@ describe('SettingsService', () => {
         loginVerificationEnabled: false,
       });
 
-      expect(repository.find).toHaveBeenCalledWith({
-        where: {
-          key: In([
-            SETTING_KEYS.REGISTRATION_VERIFICATION,
-            SETTING_KEYS.PASSWORD_RESET_VERIFICATION,
-            SETTING_KEYS.LOGIN_VERIFICATION,
-          ]),
-        },
-      });
+      expect(repository.findByKeys).toHaveBeenCalledWith([
+        SETTING_KEYS.REGISTRATION_VERIFICATION,
+        SETTING_KEYS.PASSWORD_RESET_VERIFICATION,
+        SETTING_KEYS.LOGIN_VERIFICATION,
+      ]);
     });
 
     it('parses boolean settings from DB records correctly', async () => {
-      repository.find.mockResolvedValue([
+      repository.findByKeys.mockResolvedValue([
         {
           key: SETTING_KEYS.REGISTRATION_VERIFICATION,
           value: false,
@@ -138,7 +130,7 @@ describe('SettingsService', () => {
           key: SETTING_KEYS.LOGIN_VERIFICATION,
           value: true,
         },
-      ] as SystemSetting[]);
+      ]);
 
       const result = await service.getVerificationSettings();
 
@@ -150,7 +142,7 @@ describe('SettingsService', () => {
     });
 
     it('parses object settings with enabled property correctly', async () => {
-      repository.find.mockResolvedValue([
+      repository.findByKeys.mockResolvedValue([
         {
           key: SETTING_KEYS.REGISTRATION_VERIFICATION,
           value: { enabled: false },
@@ -159,7 +151,7 @@ describe('SettingsService', () => {
           key: SETTING_KEYS.LOGIN_VERIFICATION,
           value: { enabled: true },
         },
-      ] as SystemSetting[]);
+      ]);
 
       const result = await service.getVerificationSettings();
 
@@ -171,12 +163,12 @@ describe('SettingsService', () => {
     });
 
     it('returns false for unexpected non-boolean, non-object values', async () => {
-      repository.find.mockResolvedValue([
+      repository.findByKeys.mockResolvedValue([
         {
           key: SETTING_KEYS.REGISTRATION_VERIFICATION,
           value: 'invalid_string_value',
         },
-      ] as SystemSetting[]);
+      ]);
 
       const result = await service.getVerificationSettings();
 
@@ -186,7 +178,7 @@ describe('SettingsService', () => {
 
   describe('updateVerificationSettings', () => {
     it('creates and saves all settings when complete DTO is provided', async () => {
-      repository.find.mockResolvedValue([
+      repository.findByKeys.mockResolvedValue([
         {
           id: '1',
           key: SETTING_KEYS.REGISTRATION_VERIFICATION,
@@ -200,7 +192,7 @@ describe('SettingsService', () => {
           key: SETTING_KEYS.LOGIN_VERIFICATION,
           value: true,
         },
-      ] as SystemSetting[]);
+      ]);
 
       const dto = {
         registrationVerificationEnabled: false,
@@ -210,21 +202,21 @@ describe('SettingsService', () => {
 
       const result = await service.updateVerificationSettings(dto);
 
-      expect(repository.create).toHaveBeenCalledTimes(3);
-      expect(repository.create).toHaveBeenCalledWith({
-        key: SETTING_KEYS.REGISTRATION_VERIFICATION,
-        value: false,
-      });
-      expect(repository.create).toHaveBeenCalledWith({
-        key: SETTING_KEYS.PASSWORD_RESET_VERIFICATION,
-        value: false,
-      });
-      expect(repository.create).toHaveBeenCalledWith({
-        key: SETTING_KEYS.LOGIN_VERIFICATION,
-        value: true,
-      });
-
       expect(repository.save).toHaveBeenCalledTimes(1);
+      expect(repository.save).toHaveBeenCalledWith([
+        {
+          key: SETTING_KEYS.REGISTRATION_VERIFICATION,
+          value: false,
+        },
+        {
+          key: SETTING_KEYS.PASSWORD_RESET_VERIFICATION,
+          value: false,
+        },
+        {
+          key: SETTING_KEYS.LOGIN_VERIFICATION,
+          value: true,
+        },
+      ]);
       expect(result).toEqual({
         registrationVerificationEnabled: false,
         passwordResetVerificationEnabled: false,
@@ -233,7 +225,7 @@ describe('SettingsService', () => {
     });
 
     it('selectively creates and saves only specified settings for partial DTO', async () => {
-      repository.find.mockResolvedValue([
+      repository.findByKeys.mockResolvedValue([
         {
           key: SETTING_KEYS.REGISTRATION_VERIFICATION,
           value: true,
@@ -242,7 +234,7 @@ describe('SettingsService', () => {
           key: SETTING_KEYS.LOGIN_VERIFICATION,
           value: true,
         },
-      ] as SystemSetting[]);
+      ]);
 
       const dto = {
         loginVerificationEnabled: true,
@@ -250,21 +242,21 @@ describe('SettingsService', () => {
 
       const result = await service.updateVerificationSettings(dto);
 
-      expect(repository.create).toHaveBeenCalledTimes(1);
-      expect(repository.create).toHaveBeenCalledWith({
-        key: SETTING_KEYS.LOGIN_VERIFICATION,
-        value: true,
-      });
       expect(repository.save).toHaveBeenCalledTimes(1);
+      expect(repository.save).toHaveBeenCalledWith([
+        {
+          key: SETTING_KEYS.LOGIN_VERIFICATION,
+          value: true,
+        },
+      ]);
       expect(result.loginVerificationEnabled).toBe(true);
     });
 
     it('does not invoke save when an empty DTO is passed', async () => {
-      repository.find.mockResolvedValue([]);
+      repository.findByKeys.mockResolvedValue([]);
 
       const result = await service.updateVerificationSettings({});
 
-      expect(repository.create).not.toHaveBeenCalled();
       expect(repository.save).not.toHaveBeenCalled();
       expect(result).toEqual({
         registrationVerificationEnabled: true,

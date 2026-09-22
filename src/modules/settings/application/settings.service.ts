@@ -1,26 +1,25 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
-import {
-  SETTING_KEYS,
-  SettingKey,
-  UpdateVerificationSettingsDto,
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { SETTING_KEYS, SettingKey } from '../domain/settings.constants';
+import type {
+  UpdateVerificationSettings,
   VerificationSettings,
-} from '../dto/settings.dto';
-import { SystemSetting } from '../infrastructure/entity/system-setting.entity';
+  SettingUpdate,
+} from '../domain/settings.models';
+import {
+  SETTINGS_REPOSITORY,
+  type SettingsRepository,
+} from './ports/settings-repository.port';
 
 @Injectable()
 export class SettingsService {
   private readonly logger = new Logger(SettingsService.name);
   constructor(
-    @InjectRepository(SystemSetting)
-    private readonly systemSettingRepository: Repository<SystemSetting>,
+    @Inject(SETTINGS_REPOSITORY)
+    private readonly settingsRepository: SettingsRepository,
   ) {}
 
   async isFeatureEnabled(key: SettingKey): Promise<boolean> {
-    const setting = await this.systemSettingRepository.findOne({
-      where: { key },
-    });
+    const setting = await this.settingsRepository.findByKey(key);
 
     if (!setting) return false;
 
@@ -36,9 +35,7 @@ export class SettingsService {
       SETTING_KEYS.LOGIN_VERIFICATION,
     ];
 
-    const records = await this.systemSettingRepository.find({
-      where: { key: In(keys) },
-    });
+    const records = await this.settingsRepository.findByKeys(keys);
 
     const settingsMap = new Map(records.map((r) => [r.key, r.value]));
 
@@ -59,39 +56,33 @@ export class SettingsService {
   }
 
   async updateVerificationSettings(
-    dto: UpdateVerificationSettingsDto,
+    dto: UpdateVerificationSettings,
   ): Promise<VerificationSettings> {
-    const updates: SystemSetting[] = [];
+    const updates: SettingUpdate[] = [];
 
     if (dto.registrationVerificationEnabled !== undefined) {
-      updates.push(
-        this.systemSettingRepository.create({
-          key: SETTING_KEYS.REGISTRATION_VERIFICATION,
-          value: dto.registrationVerificationEnabled,
-        }),
-      );
+      updates.push({
+        key: SETTING_KEYS.REGISTRATION_VERIFICATION,
+        value: dto.registrationVerificationEnabled,
+      });
     }
 
     if (dto.passwordResetVerificationEnabled !== undefined) {
-      updates.push(
-        this.systemSettingRepository.create({
-          key: SETTING_KEYS.PASSWORD_RESET_VERIFICATION,
-          value: dto.passwordResetVerificationEnabled,
-        }),
-      );
+      updates.push({
+        key: SETTING_KEYS.PASSWORD_RESET_VERIFICATION,
+        value: dto.passwordResetVerificationEnabled,
+      });
     }
 
     if (dto.loginVerificationEnabled !== undefined) {
-      updates.push(
-        this.systemSettingRepository.create({
-          key: SETTING_KEYS.LOGIN_VERIFICATION,
-          value: dto.loginVerificationEnabled,
-        }),
-      );
+      updates.push({
+        key: SETTING_KEYS.LOGIN_VERIFICATION,
+        value: dto.loginVerificationEnabled,
+      });
     }
 
     if (updates.length > 0) {
-      await this.systemSettingRepository.save(updates);
+      await this.settingsRepository.save(updates);
 
       this.logger.log(`Settings updated successfully`);
     }
