@@ -14,11 +14,11 @@ import { UsersService } from '../../users/application/users.service';
 import { UserStatus } from '../../users/domain/user-status.enum';
 import { VerificationService } from '../../verification/application/verification.service';
 import { VerificationTokenType } from '../../verification/domain/verification-token-type.enum';
-import { PASSWORD_HASHER } from './ports/password-hasher.port';
-import type { PasswordHasher } from './ports/password-hasher.port';
-import { AUTH_TOKEN_SERVICE } from './ports/token-service.port';
-import type { AuthTokenService } from './ports/token-service.port';
 import type { AuthTokenPayload, TokenPair } from '../domain/auth.types';
+import type { PasswordHasher } from './ports/password-hasher.port';
+import { PASSWORD_HASHER } from './ports/password-hasher.port';
+import type { AuthTokenService } from './ports/token-service.port';
+import { AUTH_TOKEN_SERVICE } from './ports/token-service.port';
 
 export type SignUpResult =
   | {
