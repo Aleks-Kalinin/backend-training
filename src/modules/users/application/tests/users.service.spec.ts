@@ -512,13 +512,17 @@ describe('UsersService', () => {
       const result = await service.getUsers(queryDto, mockAdminUserPayload.sub);
 
       expect(usersRepository.findMany).toHaveBeenCalledWith({
-        limit: 10,
+        limit: 11,
         q: 'test',
         status: UserStatus.ACTIVE,
         sort: 'created_at',
         order: 'desc',
+        cursor: undefined,
       });
-      expect(result).toEqual([mockUser]);
+      expect(result).toEqual({
+        items: [mockUser],
+        nextCursor: null,
+      });
     });
   });
 

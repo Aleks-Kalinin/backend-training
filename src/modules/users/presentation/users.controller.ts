@@ -65,7 +65,6 @@ export class UsersContoller {
     description: 'Forbidden',
   })
   @Throttle({ default: { ttl: 10000, limit: 5 } })
-  @RequirePermission('users', 'read')
   async getUsers(
     @Query() query: GetUsersQueryDto,
     @Req() req: AuthenticatedRequest,
