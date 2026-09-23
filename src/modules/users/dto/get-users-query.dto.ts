@@ -13,6 +13,14 @@ import { UserStatus } from '../domain/user-status.enum';
 
 export class GetUsersQueryDto {
   @ApiPropertyOptional({
+    description: 'Opaque pagination cursor returned from a previous page',
+    example: 'eyJpZCI6IiIsImNyZWF0ZWRBdCI6IiJ9',
+  })
+  @IsOptional()
+  @IsString()
+  cursor?: string;
+
+  @ApiPropertyOptional({
     description: 'Number of users returned per page',
     minimum: 20,
     maximum: 100,

@@ -4,6 +4,7 @@ import { SystemRole } from '@/modules/rbac/domain/system-role.enum';
 import { VerificationService } from '@/modules/verification/application/verification.service';
 import { VerificationTokenType } from '@/modules/verification/domain/verification-token-type.enum';
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   HttpStatus,
@@ -14,19 +15,6 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { UUID } from 'node:crypto';
-import { USER_DELETION_JOB_REPOSITORY } from './ports/deletion-job-repository.port';
-import type { UserDeletionJobRepository } from './ports/deletion-job-repository.port';
-import { USER_REPOSITORY } from './ports/user-repository.port';
-import type { UserRepository } from './ports/user-repository.port';
-import { USER_ROLE_REPOSITORY } from './ports/role-repository.port';
-import type { UserRoleRepository } from './ports/role-repository.port';
-import { ConfirmEmailChangeDto } from '../dto/confirm-email-change.dto';
-import { CreateUserDto } from '../dto/create-user.dto';
-import { DeleteUserResponseDto } from '../dto/delete-user-response.dto';
-import { DeleteUserDto } from '../dto/delete-user.dto';
-import { GetUsersQueryDto } from '../dto/get-users-query.dto';
-import { InitiateEmailChangeDto } from '../dto/initiate-email-change.dto';
-import { UpdateUserDto } from '../dto/update-user.dto';
 import {
   DeletionExecutionMode,
   DeletionJobStatus,
@@ -34,6 +22,19 @@ import {
 } from '../domain/deletion';
 import { User } from '../domain/entities/user.entity';
 import { UserStatus } from '../domain/user-status.enum';
+import { ConfirmEmailChangeDto } from '../dto/confirm-email-change.dto';
+import { CreateUserDto } from '../dto/create-user.dto';
+import { DeleteUserResponseDto } from '../dto/delete-user-response.dto';
+import { DeleteUserDto } from '../dto/delete-user.dto';
+import { GetUsersQueryDto } from '../dto/get-users-query.dto';
+import { InitiateEmailChangeDto } from '../dto/initiate-email-change.dto';
+import { UpdateUserDto } from '../dto/update-user.dto';
+import type { UserDeletionJobRepository } from './ports/deletion-job-repository.port';
+import { USER_DELETION_JOB_REPOSITORY } from './ports/deletion-job-repository.port';
+import type { UserRoleRepository } from './ports/role-repository.port';
+import { USER_ROLE_REPOSITORY } from './ports/role-repository.port';
+import type { UserRepository } from './ports/user-repository.port';
+import { USER_REPOSITORY } from './ports/user-repository.port';
 
 type DeleteUserResult =
   | DeleteUserResponseDto
@@ -282,27 +283,109 @@ export class UsersService {
     return savedUser;
   }
 
+  private encodeCursor(payload: { id: string; createdAt: string }): string {
+    return Buffer.from(JSON.stringify(payload)).toString('base64');
+  }
+
+  private decodeCursor(cursor: string): { id: string; createdAt: string } {
+    try {
+      const json = Buffer.from(cursor, 'base64').toString('utf-8');
+      const payload: unknown = JSON.parse(json);
+
+      if (!this.isValidCursorPayload(payload)) {
+        throw new Error('Invalid cursor payload');
+      }
+
+      return {
+        id: payload.id,
+        createdAt: payload.createdAt,
+      };
+    } catch {
+      throw new BadRequestException('Invalid pagination cursor');
+    }
+  }
+
+  private isValidCursorPayload(
+    payload: unknown,
+  ): payload is { id: string; createdAt: string } {
+    if (typeof payload !== 'object' || payload === null) {
+      return false;
+    }
+
+    if (!('id' in payload) || !('createdAt' in payload)) {
+      return false;
+    }
+
+    const candidate = payload as {
+      id: unknown;
+      createdAt: unknown;
+    };
+
+    return (
+      typeof candidate.id === 'string' &&
+      candidate.id.length > 0 &&
+      typeof candidate.createdAt === 'string' &&
+      candidate.createdAt.length > 0 &&
+      !Number.isNaN(Date.parse(candidate.createdAt))
+    );
+  }
+
   async getUsers(query: GetUsersQueryDto, actorUserId: UUID) {
-    const { limit, q, status, sort = 'created_at', order = 'desc' } = query;
+    const {
+      cursor,
+      limit = 20,
+      q,
+      status,
+      sort = 'created_at',
+      order = 'desc',
+    } = query;
+
+    const pageLimit = Math.min(Math.max(limit, 1), 100);
+
+    let cursorPayload: { id: string; createdAt: Date } | undefined;
+    if (cursor) {
+      const decoded = this.decodeCursor(cursor);
+      cursorPayload = {
+        id: decoded.id,
+        createdAt: new Date(decoded.createdAt),
+      };
+    }
 
     const users = await this.usersRepository.findMany({
-      limit,
+      limit: pageLimit + 1,
       q,
       status,
       sort,
       order,
+      cursor: cursorPayload,
     });
+
+    const hasMore = users.length > pageLimit;
+    const items = hasMore ? users.slice(0, pageLimit) : users;
+    const nextCursor = hasMore
+      ? this.encodeCursor({
+          id: items[items.length - 1].userId,
+          createdAt: items[items.length - 1].createdAt.toISOString(),
+        })
+      : null;
 
     this.logger.log(
       JSON.stringify({
         actorUserId: actorUserId,
-        query: query,
+        query: {
+          cursor: !!cursor,
+          limit: pageLimit,
+          q,
+          status,
+          sort,
+          order,
+        },
         status: HttpStatus.OK,
-        length: users.length,
+        length: items.length,
       }),
     );
 
-    return users;
+    return { items, nextCursor };
   }
 
   async deleteUser(

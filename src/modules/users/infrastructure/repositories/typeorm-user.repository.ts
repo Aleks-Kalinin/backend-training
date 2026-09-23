@@ -35,19 +35,39 @@ export class TypeOrmUserRepository implements UserRepository {
       email: 'user.email',
     };
     const query = this.repository.createQueryBuilder('user');
+
     if (search.status) {
       query.andWhere('user.status = :status', { status: search.status });
     }
+
     if (search.q) {
-      query.andWhere('user.email ILIKE :q OR CAST(user.id AS TEXT) ILIKE :q', {
-        q: `%${search.q}%`,
+      query.andWhere(
+        'user.email ILIKE :q OR CAST(user.userId AS TEXT) ILIKE :q',
+        {
+          q: `%${search.q}%`,
+        },
+      );
+    }
+
+    if (search.cursor) {
+      const cursorComparison =
+        search.order === 'desc'
+          ? '(user.createdAt < :cursorCreatedAt OR (user.createdAt = :cursorCreatedAt AND user.userId < :cursorId))'
+          : '(user.createdAt > :cursorCreatedAt OR (user.createdAt = :cursorCreatedAt AND user.userId > :cursorId))';
+
+      query.andWhere(cursorComparison, {
+        cursorCreatedAt: search.cursor.createdAt,
+        cursorId: search.cursor.id,
       });
     }
+
     query.orderBy(
       sortFields[search.sort],
       search.order.toUpperCase() as 'ASC' | 'DESC',
     );
-    query.take(search.limit);
+    query.addOrderBy('user.userId', 'ASC');
+    query.take(search.limit ?? 20);
+
     return query.getMany() as Promise<DomainUser[]>;
   }
 

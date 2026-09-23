@@ -9,6 +9,7 @@ export interface UserSearch {
   status?: UserStatus;
   sort: 'created_at' | 'updated_at' | 'email';
   order: 'asc' | 'desc';
+  cursor?: { id: string; createdAt: Date };
 }
 
 export interface UserRepository {
