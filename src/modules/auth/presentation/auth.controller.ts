@@ -64,13 +64,16 @@ export class AuthController {
     reply.clearCookie(AUTH_COOKIES.REFRESH_TOKEN, { path: '/' });
   }
 
-  @HttpCode(HttpStatus.OK)
   @Post('login')
   @ApiOperation({ summary: 'Log in a user' })
   @ApiResponse({
     status: 200,
     description:
       'Successfully authenticated. Tokens are set via HttpOnly cookies.',
+  })
+  @ApiResponse({
+    status: 202,
+    description: 'Login verification required — OTP sent to the user email.',
   })
   @ApiResponse({
     status: 400,
@@ -89,12 +92,56 @@ export class AuthController {
     @Body() signInDto: SignInDto,
     @Res({ passthrough: true }) reply: FastifyReply,
   ) {
-    const { tokens } = await this.authService.signIn(
+    const result = await this.authService.signIn(
       signInDto.email,
       signInDto.password,
     );
-    this.setAuthCookies(reply, tokens.accessToken, tokens.refreshToken);
+
+    reply.status(result.statusCode);
+
+    if (result.statusCode === HttpStatus.ACCEPTED) {
+      return result.data;
+    }
+
+    this.setAuthCookies(
+      reply,
+      result.tokens.accessToken,
+      result.tokens.refreshToken,
+    );
     return { message: 'Login successful' };
+  }
+
+  @Post('login/verify')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify login email OTP' })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Login verified and user authenticated. Tokens are set via HttpOnly cookies.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - invalid input data',
+  })
+  @ApiResponse({
+    status: 422,
+    description: 'Invalid or expired verification code',
+  })
+  @ApiResponse({
+    status: 429,
+    description: 'Maximum verification attempts exceeded',
+  })
+  @Throttle({ default: { ttl: 10000, limit: 5 } })
+  async verifyLogin(
+    @Body() verifyRegistrationDto: VerifyRegistrationDto,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ) {
+    const { tokens } = await this.authService.verifyLogin(
+      verifyRegistrationDto.attemptId,
+      verifyRegistrationDto.otp,
+    );
+    this.setAuthCookies(reply, tokens.accessToken, tokens.refreshToken);
+    return { message: 'Login verified successfully' };
   }
 
   @Post('signup')
