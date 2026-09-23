@@ -282,6 +282,14 @@ export class ConversionService implements OnModuleDestroy {
 
       // 4. Identity Conversion Guard
       if (sourceFormat === targetFormat) {
+        this.logConversionProcess(
+          userId,
+          targetFormat,
+          sourceFormat,
+          fileSize,
+          HttpStatus.OK,
+        );
+
         if (shouldSave) {
           this.enqueueSavedFilePersistence(
             fileBuffer,
@@ -336,6 +344,13 @@ export class ConversionService implements OnModuleDestroy {
           fileSize,
           startTime,
         );
+        this.logConversionProcess(
+          userId,
+          targetFormat,
+          sourceFormat,
+          fileSize,
+          HttpStatus.OK,
+        );
         return { content: convertedContent, targetFormat };
       }
 
@@ -350,6 +365,14 @@ export class ConversionService implements OnModuleDestroy {
         userId,
         fileId: null,
       });
+
+      this.logConversionProcess(
+        userId,
+        targetFormat,
+        sourceFormat,
+        fileSize,
+        HttpStatus.OK,
+      );
 
       return { content: convertedContent, targetFormat };
     } catch (error: any) {
