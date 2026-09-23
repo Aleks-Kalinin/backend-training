@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { LessThan, Repository } from 'typeorm';
+import { In, LessThan, Repository } from 'typeorm';
 import * as fs from 'node:fs/promises';
 import { ConvertedFileEntity } from './entity/converted-file.entity';
 import { TransformationHistoryItemEntity } from './entity/transformation-history-item.entity';
@@ -26,22 +26,54 @@ export class HistoryCleanupService {
       where: { createdAt: LessThan(cutoffDate) },
       relations: ['file'],
     });
-    if (expiredItems.length === 0) return;
 
-    const fileIds: string[] = [];
+    const filesToDelete = new Map<string, ConvertedFileEntity>();
     for (const item of expiredItems) {
       if (!item.file) continue;
-      fileIds.push(String(item.file.id));
-      try {
-        await fs.unlink(item.file.filePath);
-      } catch (error) {
-        this.logger.error(`Failed to delete file ${item.file.filePath}`, error);
+      filesToDelete.set(String(item.file.id), item.file);
+    }
+
+    const oldFiles = await this.fileRepository.find({
+      where: { createdAt: LessThan(cutoffDate) },
+    });
+    const oldFileIds = oldFiles.map((file) => String(file.id));
+    const referencedOldFiles =
+      oldFileIds.length === 0
+        ? []
+        : await this.historyRepository.find({
+            where: { fileId: In(oldFileIds) },
+          });
+    const referencedFileIds = new Set(
+      referencedOldFiles
+        .map((item) => item.fileId)
+        .filter((fileId): fileId is string => Boolean(fileId)),
+    );
+
+    for (const file of oldFiles) {
+      const fileId = String(file.id);
+      if (!referencedFileIds.has(fileId)) {
+        filesToDelete.set(fileId, file);
       }
     }
-    await this.historyRepository.delete({ createdAt: LessThan(cutoffDate) });
-    if (fileIds.length > 0) await this.fileRepository.delete(fileIds);
-    this.logger.log(
-      `Deleted ${expiredItems.length} transformation history items older than ${HISTORY_RETENTION_DAYS} days`,
-    );
+
+    for (const file of filesToDelete.values()) {
+      try {
+        await fs.unlink(file.filePath);
+      } catch (error) {
+        this.logger.error(`Failed to delete file ${file.filePath}`, error);
+      }
+    }
+
+    if (expiredItems.length > 0) {
+      await this.historyRepository.delete({ createdAt: LessThan(cutoffDate) });
+    }
+    if (filesToDelete.size > 0) {
+      await this.fileRepository.delete([...filesToDelete.keys()]);
+    }
+    if (expiredItems.length > 0 || filesToDelete.size > 0) {
+      this.logger.log(
+        `Deleted ${expiredItems.length} transformation history items and ${filesToDelete.size} converted files older than ${HISTORY_RETENTION_DAYS} days`,
+      );
+    }
   }
 }

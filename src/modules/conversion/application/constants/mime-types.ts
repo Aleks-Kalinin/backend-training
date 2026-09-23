@@ -7,7 +7,6 @@ export const TEXT_MIME_TYPES: Record<string, string> = {
 
 export const IMAGE_MIME_TYPES: Record<string, string> = {
   jpeg: 'image/jpeg',
-  jpg: 'image/jpeg',
   png: 'image/png',
   svg: 'image/svg+xml',
 };

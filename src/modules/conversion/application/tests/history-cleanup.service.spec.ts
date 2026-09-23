@@ -36,6 +36,7 @@ describe('HistoryCleanupService', () => {
     } as unknown as jest.Mocked<Repository<TransformationHistoryItemEntity>>;
 
     fileRepository = {
+      find: jest.fn().mockResolvedValue([]),
       delete: jest.fn(),
     } as unknown as jest.Mocked<Repository<ConvertedFileEntity>>;
 
@@ -178,6 +179,29 @@ describe('HistoryCleanupService', () => {
       expect(cutoffDate.getTime()).toBeLessThanOrEqual(
         expectedAfterDate.getTime(),
       );
+    });
+
+    it('deletes old converted files that are not referenced by history', async () => {
+      const fileId = randomUUID();
+      const filePath = '/uploads/orphaned-file.png';
+      const orphanedFile = {
+        id: fileId,
+        filePath,
+      } as ConvertedFileEntity;
+
+      transformationHistoryRepository.find
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      fileRepository.find.mockResolvedValue([orphanedFile]);
+
+      await service.cleanupExpiredHistory();
+
+      expect(transformationHistoryRepository.find).toHaveBeenNthCalledWith(2, {
+        where: { fileId: expect.anything() },
+      });
+      expect(fs.unlink).toHaveBeenCalledWith(filePath);
+      expect(fileRepository.delete).toHaveBeenCalledWith([fileId]);
+      expect(transformationHistoryRepository.delete).not.toHaveBeenCalled();
     });
   });
 });

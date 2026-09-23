@@ -3,6 +3,7 @@ import {
   BadRequestException,
   HttpException,
   HttpStatus,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
@@ -11,7 +12,6 @@ import {
   RequestTimeoutException,
   StreamableFile,
   UnsupportedMediaTypeException,
-  Inject,
 } from '@nestjs/common';
 import { FastifyRequest } from 'fastify';
 import { UUID } from 'node:crypto';
@@ -19,12 +19,6 @@ import { ImageConversionOptions } from '../domain/image-conversion-options';
 import { ImageFileFormat } from '../domain/image-file-format.enum';
 import { TextFileFormat } from '../domain/text-file-format.enum';
 import { GetHistoryQueryDto } from '../dto/get-history-query.dto';
-import { CONVERSION_ENGINE } from './ports/conversion-engine.port';
-import type { ConversionEngine } from './ports/conversion-engine.port';
-import { FILE_STORAGE } from './ports/file-storage.port';
-import type { FileStorage } from './ports/file-storage.port';
-import { HISTORY_REPOSITORY } from './ports/history-repository.port';
-import type { HistoryRepository } from './ports/history-repository.port';
 import { FILE_CONVERSION_STATUS } from './constants/file-conversion-status';
 import { FILE_SIZE_LIMITS } from './constants/file-size-limit';
 import { FILE_TYPE } from './constants/file-type';
@@ -32,6 +26,12 @@ import {
   detectImageFormat,
   detectTextFormat,
 } from './constants/mime-to-format.map';
+import type { ConversionEngine } from './ports/conversion-engine.port';
+import { CONVERSION_ENGINE } from './ports/conversion-engine.port';
+import type { FileStorage } from './ports/file-storage.port';
+import { FILE_STORAGE } from './ports/file-storage.port';
+import type { HistoryRepository } from './ports/history-repository.port';
+import { HISTORY_REPOSITORY } from './ports/history-repository.port';
 
 interface CursorPayload {
   id: string;
@@ -81,6 +81,62 @@ export class ConversionService implements OnModuleDestroy {
     );
   }
 
+  private enqueueSavedFilePersistence(
+    convertedContent: string | Buffer,
+    targetFormat: string,
+    fileType: FILE_TYPE,
+    sourceFormat: string,
+    userId: UUID,
+    fileSize: number,
+    startTime: number,
+  ): void {
+    void (async () => {
+      try {
+        const savedFile = await this.fileStorage.save(
+          convertedContent,
+          targetFormat,
+        );
+
+        this.logger.log(
+          JSON.stringify({
+            type: 'SAVE',
+            userId,
+            targetFormat,
+            fileId: savedFile.id,
+            HttpStatus: HttpStatus.OK,
+          }),
+        );
+
+        await this.createHistoryEntry({
+          type: fileType,
+          sourceFormat,
+          targetFormat,
+          status: FILE_CONVERSION_STATUS.SUCCESS,
+          fileSize,
+          startTime,
+          userId,
+          fileId: savedFile.id as UUID,
+        });
+      } catch (error) {
+        this.logger.error(
+          'Failed to persist converted file asynchronously',
+          error,
+        );
+        await this.createHistoryEntry({
+          type: fileType,
+          sourceFormat,
+          targetFormat,
+          status: FILE_CONVERSION_STATUS.ERROR,
+          fileSize,
+          startTime,
+          userId,
+          fileId: null,
+          errorCode: HttpStatus.INTERNAL_SERVER_ERROR,
+        });
+      }
+    })();
+  }
+
   async onModuleDestroy() {
     await this.conversionEngine.close();
   }
@@ -95,7 +151,6 @@ export class ConversionService implements OnModuleDestroy {
     let targetFormat: string | null = null;
     let fileSize = 0;
     let shouldSave = false;
-    let createdFileId: UUID | null = null;
     let streamError: Error | null = null;
 
     const controller = new AbortController();
@@ -227,6 +282,19 @@ export class ConversionService implements OnModuleDestroy {
 
       // 4. Identity Conversion Guard
       if (sourceFormat === targetFormat) {
+        if (shouldSave) {
+          this.enqueueSavedFilePersistence(
+            fileBuffer,
+            targetFormat,
+            fileType,
+            sourceFormat,
+            userId,
+            fileSize,
+            startTime,
+          );
+          return { content: fileBuffer, targetFormat };
+        }
+
         await this.createHistoryEntry({
           type: fileType,
           sourceFormat,
@@ -259,20 +327,16 @@ export class ConversionService implements OnModuleDestroy {
             );
 
       if (shouldSave) {
-        const savedFile = await this.fileStorage.save(
+        this.enqueueSavedFilePersistence(
           convertedContent,
           targetFormat,
+          fileType,
+          sourceFormat,
+          userId,
+          fileSize,
+          startTime,
         );
-        createdFileId = savedFile.id as UUID;
-        this.logger.log(
-          JSON.stringify({
-            type: 'SAVE',
-            userId,
-            targetFormat,
-            fileId: createdFileId,
-            HttpStatus: HttpStatus.OK,
-          }),
-        );
+        return { content: convertedContent, targetFormat };
       }
 
       // 6. Record Success
@@ -284,7 +348,7 @@ export class ConversionService implements OnModuleDestroy {
         fileSize,
         startTime,
         userId,
-        fileId: createdFileId,
+        fileId: null,
       });
 
       return { content: convertedContent, targetFormat };
@@ -326,7 +390,7 @@ export class ConversionService implements OnModuleDestroy {
             ? normalizedError.getStatus()
             : 500,
         userId,
-        fileId: createdFileId,
+        fileId: null,
       });
 
       this.logConversionProcess(
@@ -397,7 +461,7 @@ export class ConversionService implements OnModuleDestroy {
         length: res.length,
       }),
     );
-    return { data: res, nextCursor };
+    return { items: res, nextCursor };
   }
 
   private encodeCursor(payload: CursorPayload): string {

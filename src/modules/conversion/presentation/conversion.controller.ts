@@ -208,7 +208,7 @@ export class ConversionController {
   @ApiOperation({
     summary: 'Convert image file',
     description:
-      'Uploads an image file (JPEG, PNG, SVG, JPG) via multipart/form-data and returns the converted image.',
+      'Uploads an image file (JPEG, PNG, SVG) via multipart/form-data and returns the converted image.',
   })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -223,7 +223,7 @@ export class ConversionController {
         },
         targetFormat: {
           type: 'string',
-          enum: ['jpeg', 'png', 'svg', 'jpg'],
+          enum: ['jpeg', 'png', 'svg'],
           description: 'Target image format',
         },
         width: {
@@ -337,10 +337,9 @@ export class ConversionController {
     content: {
       'application/json': {
         example: [
-          { source: 'jpeg', target: ['png', 'jpg'] },
-          { source: 'png', target: ['jpeg', 'jpg'] },
-          { source: 'svg', target: ['jpeg', 'png', 'jpg'] },
-          { source: 'jpg', target: ['jpeg', 'png'] },
+          { source: 'jpeg', target: ['png'] },
+          { source: 'png', target: ['jpeg'] },
+          { source: 'svg', target: ['jpeg', 'png'] },
         ],
       },
     },
@@ -366,10 +365,9 @@ export class ConversionController {
   @RequirePermission('files', 'read')
   getAvailableImageFormats() {
     return [
-      { source: 'jpeg', target: ['png', 'jpg'] },
-      { source: 'png', target: ['jpeg', 'jpg'] },
-      { source: 'svg', target: ['jpeg', 'png', 'jpg'] },
-      { source: 'jpg', target: ['jpeg', 'png'] },
+      { source: 'jpeg', target: ['png'] },
+      { source: 'png', target: ['jpeg'] },
+      { source: 'svg', target: ['jpeg', 'png'] },
     ];
   }
 
@@ -384,15 +382,18 @@ export class ConversionController {
     description: 'Transformation history retrieved successfully',
     content: {
       'application/json': {
-        example: [
-          {
-            id: '1',
-            userId: 'user-id',
-            format: 'csv',
-            size: 1024,
-            createdAt: '2022-01-01T00:00:00.000Z',
-          },
-        ],
+        example: {
+          items: [
+            {
+              id: '1',
+              userId: 'user-id',
+              format: 'csv',
+              size: 1024,
+              createdAt: '2022-01-01T00:00:00.000Z',
+            },
+          ],
+          nextCursor: null,
+        },
       },
     },
   })
@@ -445,15 +446,18 @@ export class ConversionController {
     description: 'Transformation history retrieved successfully',
     content: {
       'application/json': {
-        example: [
-          {
-            id: '1',
-            userId: 'user-id',
-            format: 'csv',
-            size: 1024,
-            createdAt: '2022-01-01T00:00:00.000Z',
-          },
-        ],
+        example: {
+          items: [
+            {
+              id: '1',
+              userId: 'user-id',
+              format: 'csv',
+              size: 1024,
+              createdAt: '2022-01-01T00:00:00.000Z',
+            },
+          ],
+          nextCursor: null,
+        },
       },
     },
   })

@@ -203,7 +203,7 @@ describe('ConversionService', () => {
         .mockReturnValue(mockQueryBuilder);
 
       const result = await service.getHistory(mockUserId, mockTargetId, {});
-      expect(result).toEqual({ data: mockHistory, nextCursor: null });
+      expect(result).toEqual({ items: mockHistory, nextCursor: null });
       expect(
         transformationHistoryRepository.createQueryBuilder,
       ).toHaveBeenCalledWith('history');
@@ -413,6 +413,7 @@ describe('ConversionService', () => {
         FILE_TYPE.IMAGE,
         mockUserId,
       );
+      await new Promise((resolve) => setTimeout(resolve, 0));
 
       expect(result.content).toBe(convertedBuffer);
       expect(fs.mkdir).toHaveBeenCalled();
@@ -451,6 +452,7 @@ describe('ConversionService', () => {
       ]);
 
       await service.convertMultipartRequest(req, FILE_TYPE.IMAGE, mockUserId);
+      await new Promise((resolve) => setTimeout(resolve, 0));
 
       expect(convertedFileRepository.save).toHaveBeenCalled();
       expect(transformationHistoryRepository.save).toHaveBeenCalledWith(
