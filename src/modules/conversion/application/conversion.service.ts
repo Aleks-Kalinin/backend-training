@@ -266,7 +266,7 @@ export class ConversionService implements OnModuleDestroy {
       }
 
       // 3. Size Limit Enforcement
-      const fileSizeLimit = FILE_SIZE_LIMITS[targetFormat];
+      const fileSizeLimit = FILE_SIZE_LIMITS[sourceFormat];
       if (fileSizeLimit && fileSize > fileSizeLimit) {
         this.logConversionProcess(
           userId,
