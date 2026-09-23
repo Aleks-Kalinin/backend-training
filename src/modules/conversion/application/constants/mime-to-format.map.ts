@@ -26,12 +26,12 @@ export const MIN_TO_IMAGE_FORMAT: Record<string, ImageFileFormat> = {
   'image/jpeg': ImageFileFormat.JPEG,
   'image/png': ImageFileFormat.PNG,
   'image/svg+xml': ImageFileFormat.SVG,
-  'image/jpg': ImageFileFormat.JPG,
+  'image/jpg': ImageFileFormat.JPEG,
 };
 
 export const EXT_TO_IMAGE_FORMAT: Record<string, ImageFileFormat> = {
   jpeg: ImageFileFormat.JPEG,
-  jpg: ImageFileFormat.JPG,
+  jpg: ImageFileFormat.JPEG,
   png: ImageFileFormat.PNG,
   svg: ImageFileFormat.SVG,
 };
