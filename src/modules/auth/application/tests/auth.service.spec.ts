@@ -33,6 +33,7 @@ describe('AuthService', () => {
       findOne: jest.fn(),
       createUser: jest.fn(),
       updateUser: jest.fn(),
+      getUser: jest.fn(),
     } as unknown as jest.Mocked<UsersService>;
 
     settingsService = {
@@ -181,6 +182,98 @@ describe('AuthService', () => {
         message: 'Registration pending email verification.',
         verificationRequired: true,
         attemptId: 'attempt-id',
+      },
+    });
+  });
+
+  it('requires OTP verification before completing login when login verification is enabled', async () => {
+    usersService.findOne.mockResolvedValue({
+      userId: 'user-id',
+      email: 'user@example.com',
+      password: 'hashed',
+      status: UserStatus.ACTIVE,
+      isVerified: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      roles: [
+        {
+          id: randomUUID(),
+          name: SystemRole.USER,
+          description: 'User role',
+          grants: [],
+        },
+      ],
+      photo: null,
+    });
+    passwordHasher.compare.mockResolvedValue(true);
+    settingsService.isFeatureEnabled.mockResolvedValue(true);
+    verificationService.createVerificationRecord.mockResolvedValue({
+      attemptId: 'login-attempt-id',
+      rawOtp: '654321',
+    });
+
+    const result = await service.signIn('user@example.com', 'Password123');
+
+    expect(verificationService.createVerificationRecord).toHaveBeenCalledWith(
+      'user-id',
+      VerificationTokenType.LOGIN,
+    );
+    expect(mailService.sendVerificationOtp).toHaveBeenCalledWith(
+      'user@example.com',
+      '654321',
+    );
+    expect(result).toEqual({
+      statusCode: HttpStatus.ACCEPTED,
+      data: {
+        message: 'Login verification required.',
+        verificationRequired: true,
+        attemptId: 'login-attempt-id',
+      },
+    });
+  });
+
+  it('issues auth tokens after successful login OTP verification', async () => {
+    verificationService.verifyOtp.mockResolvedValue({
+      userId: 'user-id',
+      targetEmail: undefined,
+      type: VerificationTokenType.LOGIN,
+      tokenHash: 'hash',
+      expiresAt: new Date(Date.now() + 600000),
+      attempts: 0,
+      consumedAt: null,
+      verificationTokenId: 'login-attempt-id',
+    });
+    usersService.getUser.mockResolvedValue({
+      userId: 'user-id',
+      email: 'user@example.com',
+      password: 'hashed',
+      status: UserStatus.ACTIVE,
+      isVerified: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      roles: [
+        {
+          id: randomUUID(),
+          name: SystemRole.USER,
+          description: 'User role',
+          grants: [],
+        },
+      ],
+      photo: null,
+    });
+
+    const result = await service.verifyLogin('login-attempt-id', '654321');
+
+    expect(verificationService.verifyOtp).toHaveBeenCalledWith(
+      'login-attempt-id',
+      '654321',
+      VerificationTokenType.LOGIN,
+    );
+    expect(tokenService.generateTokenPair).toHaveBeenCalled();
+    expect(result).toEqual({
+      tokens: {
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
       },
     });
   });

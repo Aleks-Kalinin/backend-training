@@ -31,6 +31,16 @@ export type SignUpResult =
       data: { message: string; verificationRequired: true; attemptId: string };
     };
 
+export type SignInResult =
+  | {
+      statusCode: HttpStatus.OK;
+      tokens: TokenPair;
+    }
+  | {
+      statusCode: HttpStatus.ACCEPTED;
+      data: { message: string; verificationRequired: true; attemptId: string };
+    };
+
 export type { TokenPair } from '../domain/auth.types';
 export type JwtPayload = AuthTokenPayload;
 
@@ -130,7 +140,7 @@ export class AuthService {
     return { tokens };
   }
 
-  async signIn(email: string, pass: string): Promise<{ tokens: TokenPair }> {
+  async signIn(email: string, pass: string): Promise<SignInResult> {
     const user = await this.usersService.findOne(email.trim().toLowerCase());
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
@@ -160,7 +170,52 @@ export class AuthService {
       );
 
     if (isLoginVerificationRequired) {
-      // Generate OTP and send to user via email/SMS
+      const { attemptId, rawOtp } =
+        await this.verificationService.createVerificationRecord(
+          user.userId,
+          VerificationTokenType.LOGIN,
+        );
+
+      await this.mailService.sendVerificationOtp(user.email, rawOtp);
+
+      return {
+        statusCode: HttpStatus.ACCEPTED,
+        data: {
+          message: 'Login verification required.',
+          verificationRequired: true,
+          attemptId,
+        },
+      };
+    }
+
+    const roleNames = user.roles ? user.roles.map((role) => role.name) : [];
+    const payload: JwtPayload = {
+      sub: user.userId,
+      email: user.email,
+      roles: roleNames,
+    };
+
+    const tokens = await this.generateTokenPair(payload);
+    return { statusCode: HttpStatus.OK, tokens };
+  }
+
+  async verifyLogin(
+    attemptId: string,
+    otp: string,
+  ): Promise<{ tokens: TokenPair }> {
+    const token = await this.verificationService.verifyOtp(
+      attemptId,
+      otp,
+      VerificationTokenType.LOGIN,
+    );
+
+    const user = await this.usersService.getUser(String(token.userId));
+    if (!user) {
+      throw new UnauthorizedException('Invalid login verification');
+    }
+
+    if (!user.isVerified || user.status !== UserStatus.ACTIVE) {
+      throw new ForbiddenException('Account is not active');
     }
 
     const roleNames = user.roles ? user.roles.map((role) => role.name) : [];

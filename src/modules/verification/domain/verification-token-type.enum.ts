@@ -1,5 +1,6 @@
 export enum VerificationTokenType {
   REGISTRATION = 'REGISTRATION',
+  LOGIN = 'LOGIN',
   EMAIL_CHANGE = 'EMAIL_CHANGE',
   USER_DELETION = 'USER_DELETION',
 }
