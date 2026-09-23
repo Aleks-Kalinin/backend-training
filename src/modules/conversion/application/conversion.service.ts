@@ -397,7 +397,7 @@ export class ConversionService implements OnModuleDestroy {
         length: res.length,
       }),
     );
-    return { data: res, nextCursor };
+    return { items: res, nextCursor };
   }
 
   private encodeCursor(payload: CursorPayload): string {

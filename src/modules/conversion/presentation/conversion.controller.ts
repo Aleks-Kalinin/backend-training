@@ -382,15 +382,18 @@ export class ConversionController {
     description: 'Transformation history retrieved successfully',
     content: {
       'application/json': {
-        example: [
-          {
-            id: '1',
-            userId: 'user-id',
-            format: 'csv',
-            size: 1024,
-            createdAt: '2022-01-01T00:00:00.000Z',
-          },
-        ],
+        example: {
+          items: [
+            {
+              id: '1',
+              userId: 'user-id',
+              format: 'csv',
+              size: 1024,
+              createdAt: '2022-01-01T00:00:00.000Z',
+            },
+          ],
+          nextCursor: null,
+        },
       },
     },
   })
@@ -443,15 +446,18 @@ export class ConversionController {
     description: 'Transformation history retrieved successfully',
     content: {
       'application/json': {
-        example: [
-          {
-            id: '1',
-            userId: 'user-id',
-            format: 'csv',
-            size: 1024,
-            createdAt: '2022-01-01T00:00:00.000Z',
-          },
-        ],
+        example: {
+          items: [
+            {
+              id: '1',
+              userId: 'user-id',
+              format: 'csv',
+              size: 1024,
+              createdAt: '2022-01-01T00:00:00.000Z',
+            },
+          ],
+          nextCursor: null,
+        },
       },
     },
   })

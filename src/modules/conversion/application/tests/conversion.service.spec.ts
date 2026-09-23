@@ -203,7 +203,7 @@ describe('ConversionService', () => {
         .mockReturnValue(mockQueryBuilder);
 
       const result = await service.getHistory(mockUserId, mockTargetId, {});
-      expect(result).toEqual({ data: mockHistory, nextCursor: null });
+      expect(result).toEqual({ items: mockHistory, nextCursor: null });
       expect(
         transformationHistoryRepository.createQueryBuilder,
       ).toHaveBeenCalledWith('history');
