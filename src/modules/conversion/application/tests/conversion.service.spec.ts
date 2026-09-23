@@ -413,6 +413,7 @@ describe('ConversionService', () => {
         FILE_TYPE.IMAGE,
         mockUserId,
       );
+      await new Promise((resolve) => setTimeout(resolve, 0));
 
       expect(result.content).toBe(convertedBuffer);
       expect(fs.mkdir).toHaveBeenCalled();
@@ -451,6 +452,7 @@ describe('ConversionService', () => {
       ]);
 
       await service.convertMultipartRequest(req, FILE_TYPE.IMAGE, mockUserId);
+      await new Promise((resolve) => setTimeout(resolve, 0));
 
       expect(convertedFileRepository.save).toHaveBeenCalled();
       expect(transformationHistoryRepository.save).toHaveBeenCalledWith(
