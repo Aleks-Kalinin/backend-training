@@ -36,6 +36,7 @@ import { DeleteUserResponseDto } from '../dto/delete-user-response.dto';
 import { DeleteUserDto } from '../dto/delete-user.dto';
 import { GetUsersQueryDto } from '../dto/get-users-query.dto';
 import { InitiateEmailChangeDto } from '../dto/initiate-email-change.dto';
+import { PaginatedUsersResponseDto } from '../dto/paginated-users-response.dto';
 import { UpdateUserDto } from '../dto/update-user.dto';
 import { UserResponseDto } from '../dto/user-response.dto';
 
@@ -53,8 +54,7 @@ export class UsersContoller {
   @ApiResponse({
     status: 200,
     description: 'Successfully retrieved list of users',
-    type: UserResponseDto,
-    isArray: true,
+    type: PaginatedUsersResponseDto,
   })
   @ApiResponse({
     status: 401,

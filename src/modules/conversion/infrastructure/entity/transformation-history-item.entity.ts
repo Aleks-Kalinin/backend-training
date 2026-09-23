@@ -12,6 +12,9 @@ import { FILE_TYPE } from '../../application/constants/file-type';
 import { ConvertedFileEntity } from './converted-file.entity';
 
 @Entity('file_conversion_history')
+@Index('IDX_file_conversion_history_user_created', ['userId', 'createdAt'])
+@Index('IDX_file_conversion_history_type', ['type'])
+@Index('IDX_file_conversion_history_status', ['status'])
 export class TransformationHistoryItemEntity {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -37,14 +40,12 @@ export class TransformationHistoryItemEntity {
   @Column({ type: 'integer', nullable: true })
   errorCode!: number | null;
 
-  @Index()
   @CreateDateColumn({
     type: 'timestamptz',
     default: () => 'CURRENT_TIMESTAMP',
   })
   createdAt!: Date;
 
-  @Index()
   @Column({ type: 'uuid', nullable: true })
   userId!: string | null;
 
