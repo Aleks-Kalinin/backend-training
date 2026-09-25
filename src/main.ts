@@ -1,6 +1,7 @@
 import { ConfigService } from '@/core/config/config.service';
 import compression from '@fastify/compress';
 import fastifyCookie from '@fastify/cookie';
+import fastifyHelmet from '@fastify/helmet';
 import fastifyMultipart from '@fastify/multipart';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
@@ -23,6 +24,11 @@ async function bootstrap() {
     AppModule,
     new FastifyAdapter(),
   );
+
+  await app.register(fastifyHelmet, {
+    // Nest Swagger UI uses an inline bootstrap script.
+    contentSecurityPolicy: false,
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({

@@ -1,6 +1,6 @@
 # Backend Template
 
-NestJS backend project template. HTTP kernel is **Fastify** (`@nestjs/platform-fastify`), not Express — use Fastify plugins and types (`NestFastifyApplication`, `app.register(...)`) in `src/main.ts`. Compression (`@fastify/compress`) and cookies (`@fastify/cookie`) are already registered.
+NestJS backend project template. HTTP kernel is **Fastify** (`@nestjs/platform-fastify`), not Express — use Fastify plugins and types (`NestFastifyApplication`, `app.register(...)`) in `src/main.ts`. Compression (`@fastify/compress`), cookies (`@fastify/cookie`), and security headers (`@fastify/helmet`) are registered. Helmet's content security policy is disabled to keep the Swagger UI's inline bootstrap script working.
 
 ## Scripts
 
