@@ -101,10 +101,10 @@ export class AuthService {
     }
 
     const { attemptId, rawOtp } =
-      await this.verificationService.createVerificationRecord(
-        user.userId,
-        VerificationTokenType.REGISTRATION,
-      );
+      await this.verificationService.createVerificationRecord({
+        userId: user.userId,
+        type: VerificationTokenType.REGISTRATION,
+      });
 
     await this.mailService.sendVerificationOtp(user.email, rawOtp);
 
@@ -122,12 +122,18 @@ export class AuthService {
     attemptId: string,
     otp: string,
   ): Promise<{ tokens: TokenPair }> {
-    const token = await this.verificationService.verifyOtp(attemptId, otp);
+    const token = await this.verificationService.verifyOtp({
+      attemptId,
+      inputOtp: otp,
+    });
 
     // Activate user upon successful verification
-    const user = await this.usersService.updateUser(token.userId, {
-      isVerified: true,
-      status: UserStatus.ACTIVE,
+    const user = await this.usersService.updateUser({
+      userId: token.userId,
+      updateData: {
+        isVerified: true,
+        status: UserStatus.ACTIVE,
+      },
     });
 
     const roleNames = user.roles ? user.roles.map((role) => role.name) : [];
@@ -171,10 +177,10 @@ export class AuthService {
 
     if (isLoginVerificationRequired) {
       const { attemptId, rawOtp } =
-        await this.verificationService.createVerificationRecord(
-          user.userId,
-          VerificationTokenType.LOGIN,
-        );
+        await this.verificationService.createVerificationRecord({
+          userId: user.userId,
+          type: VerificationTokenType.LOGIN,
+        });
 
       await this.mailService.sendVerificationOtp(user.email, rawOtp);
 
@@ -203,11 +209,11 @@ export class AuthService {
     attemptId: string,
     otp: string,
   ): Promise<{ tokens: TokenPair }> {
-    const token = await this.verificationService.verifyOtp(
+    const token = await this.verificationService.verifyOtp({
       attemptId,
-      otp,
-      VerificationTokenType.LOGIN,
-    );
+      inputOtp: otp,
+      expectedType: VerificationTokenType.LOGIN,
+    });
 
     const user = await this.usersService.getUser(String(token.userId));
     if (!user) {

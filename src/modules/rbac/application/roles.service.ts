@@ -64,11 +64,15 @@ export class RolesService {
     return savedRole;
   }
 
-  async update(
-    id: string,
-    updateRoleDto: UpdateRoleDto,
-    actorUserId: UUID,
-  ): Promise<Role> {
+  async update({
+    id,
+    updateRoleDto,
+    actorUserId,
+  }: {
+    id: string;
+    updateRoleDto: UpdateRoleDto;
+    actorUserId: UUID;
+  }): Promise<Role> {
     const role = await this.findOne(id);
 
     // If changing name, ensure it remains unique

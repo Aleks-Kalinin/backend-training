@@ -8,6 +8,12 @@ type PermissionMap = Record<string, string[] | '*'>;
 
 type RbacCache = Record<string, PermissionMap>;
 
+interface PermissionCheckParams {
+  userRoles: string[];
+  requiredPermission: string;
+  requiredAction: string;
+}
+
 @Injectable()
 export class RbacCacheService implements OnModuleInit {
   private readonly logger = new Logger(RbacCacheService.name);
@@ -58,11 +64,11 @@ export class RbacCacheService implements OnModuleInit {
     }
   }
 
-  hasPermission(
-    userRoles: string[],
-    requiredPermission: string,
-    requiredAction: string,
-  ): boolean {
+  hasPermission({
+    userRoles,
+    requiredPermission,
+    requiredAction,
+  }: PermissionCheckParams): boolean {
     if (!userRoles || userRoles.length === 0) return false;
 
     for (const roleName of userRoles) {

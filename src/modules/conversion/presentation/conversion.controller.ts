@@ -40,11 +40,15 @@ import { GetHistoryQueryDto } from '../dto/get-history-query.dto';
 export class ConversionController {
   constructor(private readonly conversionService: ConversionService) {}
 
-  private setDownloadHeaders(
-    reply: FastifyReply,
-    targetFormat: string,
-    itemId: UUID,
-  ) {
+  private setDownloadHeaders({
+    reply,
+    targetFormat,
+    itemId,
+  }: {
+    reply: FastifyReply;
+    targetFormat: string;
+    itemId: UUID;
+  }) {
     const ALL_MIME_TYPES = { ...TEXT_MIME_TYPES, ...IMAGE_MIME_TYPES };
 
     reply.header(
@@ -138,11 +142,11 @@ export class ConversionController {
     }
 
     const { content, targetFormat } =
-      await this.conversionService.convertMultipartRequest(
+      await this.conversionService.convertMultipartRequest({
         req,
-        FILE_TYPE.TEXT,
+        fileType: FILE_TYPE.TEXT,
         userId,
-      );
+      });
 
     reply
       .header(
@@ -307,11 +311,11 @@ export class ConversionController {
     }
 
     const { content, targetFormat } =
-      await this.conversionService.convertMultipartRequest(
+      await this.conversionService.convertMultipartRequest({
         req,
-        FILE_TYPE.IMAGE,
+        fileType: FILE_TYPE.IMAGE,
         userId,
-      );
+      });
 
     reply
       .header(
@@ -426,7 +430,11 @@ export class ConversionController {
       throw new Error('User ID is required');
     }
 
-    return this.conversionService.getHistory(userId, userId, query);
+    return this.conversionService.getHistory({
+      userId,
+      targetUserId: userId,
+      query,
+    });
   }
 
   @Get('admin/users/:userId/transformations/history')
@@ -494,7 +502,11 @@ export class ConversionController {
     @Query() query: GetHistoryQueryDto,
     @Req() req: AuthenticatedRequest,
   ) {
-    return this.conversionService.getHistory(userId, req.user?.sub, query);
+    return this.conversionService.getHistory({
+      userId,
+      targetUserId: req.user?.sub,
+      query,
+    });
   }
 
   @Get('api/transformations/history/:itemId/download')
@@ -559,7 +571,7 @@ export class ConversionController {
     const { stream, targetFormat } =
       await this.conversionService.getFileForDownload(userId, itemId);
 
-    this.setDownloadHeaders(reply, targetFormat, itemId);
+    this.setDownloadHeaders({ reply, targetFormat, itemId });
     return stream;
   }
 
@@ -625,7 +637,7 @@ export class ConversionController {
   ) {
     const { stream, targetFormat } =
       await this.conversionService.getFileForDownload(userId, itemId);
-    this.setDownloadHeaders(reply, targetFormat, itemId);
+    this.setDownloadHeaders({ reply, targetFormat, itemId });
     return stream;
   }
 }

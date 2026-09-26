@@ -81,11 +81,15 @@ export class PermissionsService {
     return createdPermission;
   }
 
-  async update(
-    id: string,
-    updatePermissionDto: UpdatePermissionDto,
-    actorUserId: UUID,
-  ): Promise<Permission> {
+  async update({
+    id,
+    updatePermissionDto,
+    actorUserId,
+  }: {
+    id: string;
+    updatePermissionDto: UpdatePermissionDto;
+    actorUserId: UUID;
+  }): Promise<Permission> {
     const permission = await this.findOne(id, actorUserId);
 
     if (

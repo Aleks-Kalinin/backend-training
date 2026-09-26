@@ -59,11 +59,11 @@ export class RbacGuard implements CanActivate {
 
     const userRoles: string[] = user.roles || [];
 
-    const isAllowed = this.rbacCacheService.hasPermission(
+    const isAllowed = this.rbacCacheService.hasPermission({
       userRoles,
-      requirement.permission,
-      requirement.action,
-    );
+      requiredPermission: requirement.permission,
+      requiredAction: requirement.action,
+    });
 
     if (!isAllowed) {
       throw new ForbiddenException('Insufficent permissions');

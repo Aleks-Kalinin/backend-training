@@ -44,6 +44,47 @@ type DeleteUserResult =
       message: string;
     };
 
+type UserDeletionOperationType = 'self' | 'admin';
+
+interface UserUpdateAuditParams {
+  actorUserId: string;
+  targetUserId: string;
+  fields: string[];
+  status: number;
+}
+
+interface UserDeleteAuditParams {
+  actorUserId: string;
+  targetUserId: string;
+  operationType: UserDeletionOperationType;
+  status: number;
+}
+
+interface EmailChangeParams<TDto> {
+  userId: UUID;
+  dto: TDto;
+  requestingUser: AuthTokenPayload;
+}
+
+interface UpdateUserParams {
+  userId: string;
+  updateData: UpdateUserDto;
+  requestingUser?: AuthTokenPayload;
+}
+
+interface DeleteUserParams {
+  userId: UUID;
+  dto?: DeleteUserDto;
+  requestingUser?: AuthTokenPayload;
+  isAsync?: boolean;
+}
+
+interface ProcessUserDeletionParams {
+  job: UserDeletionJob;
+  user: User;
+  operationType: UserDeletionOperationType;
+}
+
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
@@ -59,16 +100,15 @@ export class UsersService {
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
-  private logUserUpdateAudit(
-    event: 'UPDATE',
-    actorUserId: string,
-    targetUserId: string,
-    fields: string[],
-    status: number,
-  ): void {
+  private logUserUpdateAudit({
+    actorUserId,
+    targetUserId,
+    fields,
+    status,
+  }: UserUpdateAuditParams): void {
     this.logger.log(
       JSON.stringify({
-        event,
+        event: 'UPDATE',
         actorUserId,
         targetUserId,
         fields,
@@ -77,16 +117,15 @@ export class UsersService {
     );
   }
 
-  private logUserDeleteAudit(
-    event: 'DELETE',
-    actorUserId: string,
-    targetUserId: string,
-    operationType: 'self' | 'admin',
-    status: number,
-  ): void {
+  private logUserDeleteAudit({
+    actorUserId,
+    targetUserId,
+    operationType,
+    status,
+  }: UserDeleteAuditParams): void {
     this.logger.log(
       JSON.stringify({
-        event,
+        event: 'DELETE',
         actorUserId,
         targetUserId,
         operationType,
@@ -95,11 +134,11 @@ export class UsersService {
     );
   }
 
-  async initiateEmailChange(
-    userId: UUID,
-    dto: InitiateEmailChangeDto,
-    requestingUser: AuthTokenPayload,
-  ) {
+  async initiateEmailChange({
+    userId,
+    dto,
+    requestingUser,
+  }: EmailChangeParams<InitiateEmailChangeDto>) {
     if (String(userId) !== String(requestingUser.sub)) {
       throw new ForbiddenException('You can only change your own profile');
     }
@@ -110,11 +149,11 @@ export class UsersService {
       throw new ConflictException('Email already exists');
     }
 
-    const challenge = await this.verificationService.createVerificationRecord(
+    const challenge = await this.verificationService.createVerificationRecord({
       userId,
-      VerificationTokenType.EMAIL_CHANGE,
+      type: VerificationTokenType.EMAIL_CHANGE,
       targetEmail,
-    );
+    });
 
     await this.mailService.sendVerificationOtp(targetEmail, challenge.rawOtp);
 
@@ -124,20 +163,20 @@ export class UsersService {
     };
   }
 
-  async confirmEmailChange(
-    userId: UUID,
-    dto: ConfirmEmailChangeDto,
-    requestingUser: AuthTokenPayload,
-  ) {
+  async confirmEmailChange({
+    userId,
+    dto,
+    requestingUser,
+  }: EmailChangeParams<ConfirmEmailChangeDto>) {
     if (String(userId) !== String(requestingUser.sub)) {
       throw new ForbiddenException('You can only change your own profile');
     }
 
-    const record = await this.verificationService.verifyOtp(
-      dto.challengeId,
-      dto.code,
-      VerificationTokenType.EMAIL_CHANGE,
-    );
+    const record = await this.verificationService.verifyOtp({
+      attemptId: dto.challengeId,
+      inputOtp: dto.code,
+      expectedType: VerificationTokenType.EMAIL_CHANGE,
+    });
 
     if (String(record.userId) !== String(userId)) {
       throw new ForbiddenException('Invalid challenge session for user.');
@@ -199,24 +238,23 @@ export class UsersService {
     return savedUser;
   }
 
-  async updateUser(
-    userId: string,
-    updateData: UpdateUserDto,
-    requestingUser?: AuthTokenPayload,
-  ): Promise<User> {
+  async updateUser({
+    userId,
+    updateData,
+    requestingUser,
+  }: UpdateUserParams): Promise<User> {
     const actorUserId = requestingUser?.sub
       ? String(requestingUser.sub)
       : userId;
     const user = await this.usersRepository.findById(userId);
 
     if (!user) {
-      this.logUserUpdateAudit(
-        'UPDATE',
+      this.logUserUpdateAudit({
         actorUserId,
-        userId,
-        Object.keys(updateData),
-        HttpStatus.NOT_FOUND,
-      );
+        targetUserId: userId,
+        fields: Object.keys(updateData),
+        status: HttpStatus.NOT_FOUND,
+      });
       throw new Error('User not found');
     }
 
@@ -225,24 +263,22 @@ export class UsersService {
       const isAdmin = requestingUser.roles.includes(SystemRole.ADMIN);
 
       if (!isSelf && !isAdmin) {
-        this.logUserUpdateAudit(
-          'UPDATE',
+        this.logUserUpdateAudit({
           actorUserId,
-          userId,
-          Object.keys(updateData),
-          HttpStatus.FORBIDDEN,
-        );
+          targetUserId: userId,
+          fields: Object.keys(updateData),
+          status: HttpStatus.FORBIDDEN,
+        });
         throw new ForbiddenException('Insufficient permissions');
       }
 
       if (isSelf && !isAdmin && updateData.email !== undefined) {
-        this.logUserUpdateAudit(
-          'UPDATE',
+        this.logUserUpdateAudit({
           actorUserId,
-          userId,
-          Object.keys(updateData),
-          HttpStatus.FORBIDDEN,
-        );
+          targetUserId: userId,
+          fields: Object.keys(updateData),
+          status: HttpStatus.FORBIDDEN,
+        });
         throw new ForbiddenException(
           'Direct email updates are not allowed. Use the dedicated endpoint for email changes.',
         );
@@ -254,13 +290,12 @@ export class UsersService {
         updateData.email.trim().toLowerCase(),
       );
       if (existingUser) {
-        this.logUserUpdateAudit(
-          'UPDATE',
+        this.logUserUpdateAudit({
           actorUserId,
-          userId,
-          Object.keys(updateData),
-          HttpStatus.CONFLICT,
-        );
+          targetUserId: userId,
+          fields: Object.keys(updateData),
+          status: HttpStatus.CONFLICT,
+        });
         throw new ConflictException('Email already exists');
       }
 
@@ -272,13 +307,12 @@ export class UsersService {
     const savedUser = await this.usersRepository.save(user);
 
     const changedFields = Object.keys(updateData);
-    this.logUserUpdateAudit(
-      'UPDATE',
+    this.logUserUpdateAudit({
       actorUserId,
-      userId,
-      changedFields,
-      HttpStatus.OK,
-    );
+      targetUserId: userId,
+      fields: changedFields,
+      status: HttpStatus.OK,
+    });
 
     return savedUser;
   }
@@ -388,24 +422,23 @@ export class UsersService {
     return { items, nextCursor };
   }
 
-  async deleteUser(
-    userId: UUID,
-    dto: DeleteUserDto = {},
-    requestingUser?: AuthTokenPayload,
-    isAsync: boolean = false,
-  ): Promise<DeleteUserResult> {
+  async deleteUser({
+    userId,
+    dto = {},
+    requestingUser,
+    isAsync = false,
+  }: DeleteUserParams): Promise<DeleteUserResult> {
     const operationType: 'self' | 'admin' =
       requestingUser?.sub === userId ? 'self' : 'admin';
     const user = await this.usersRepository.findById(String(userId));
 
     if (!user) {
-      this.logUserDeleteAudit(
-        'DELETE',
-        userId,
-        userId,
+      this.logUserDeleteAudit({
+        actorUserId: String(userId),
+        targetUserId: String(userId),
         operationType,
-        HttpStatus.NOT_FOUND,
-      );
+        status: HttpStatus.NOT_FOUND,
+      });
       throw new NotFoundException('User not found');
     }
 
@@ -431,24 +464,23 @@ export class UsersService {
       if (isSelf && !isAdmin) {
         if (!dto.challengeId || !dto.code) {
           const challenge =
-            await this.verificationService.createVerificationRecord(
-              String(userId),
-              VerificationTokenType.USER_DELETION,
-              user.email,
-            );
+            await this.verificationService.createVerificationRecord({
+              userId: String(userId),
+              type: VerificationTokenType.USER_DELETION,
+              targetEmail: user.email,
+            });
 
           await this.mailService.sendVerificationOtp(
             user.email,
             challenge.rawOtp,
           );
 
-          this.logUserDeleteAudit(
-            'DELETE',
-            String(userId),
-            String(userId),
+          this.logUserDeleteAudit({
+            actorUserId: String(userId),
+            targetUserId: String(userId),
             operationType,
-            HttpStatus.OK,
-          );
+            status: HttpStatus.OK,
+          });
 
           return {
             requiresConfirmation: true,
@@ -458,20 +490,19 @@ export class UsersService {
           };
         }
 
-        const record = await this.verificationService.verifyOtp(
-          dto.challengeId,
-          dto.code,
-          VerificationTokenType.USER_DELETION,
-        );
+        const record = await this.verificationService.verifyOtp({
+          attemptId: dto.challengeId,
+          inputOtp: dto.code,
+          expectedType: VerificationTokenType.USER_DELETION,
+        });
 
         if (String(record.userId) !== String(userId)) {
-          this.logUserDeleteAudit(
-            'DELETE',
-            String(userId),
-            String(userId),
+          this.logUserDeleteAudit({
+            actorUserId: String(userId),
+            targetUserId: String(userId),
             operationType,
-            HttpStatus.FORBIDDEN,
-          );
+            status: HttpStatus.FORBIDDEN,
+          });
           throw new ForbiddenException('Invalid challenge session for user.');
         }
       }
@@ -506,7 +537,7 @@ export class UsersService {
         mode: job.mode,
       };
     } else {
-      await this.processUserDeletion(job, user, operationType);
+      await this.processUserDeletion({ job, user, operationType });
       return {
         jobId: job.id,
         status: DeletionJobStatus.DONE,
@@ -518,11 +549,11 @@ export class UsersService {
     }
   }
 
-  async processUserDeletion(
-    job: UserDeletionJob,
-    user: User,
-    operationType: 'self' | 'admin',
-  ) {
+  async processUserDeletion({
+    job,
+    user,
+    operationType,
+  }: ProcessUserDeletionParams) {
     try {
       job.status = DeletionJobStatus.IN_PROGRESS;
       await this.userDeletionJobRepository.save(job);
@@ -539,21 +570,19 @@ export class UsersService {
       await this.userDeletionJobRepository.save(job);
 
       if (job.status === DeletionJobStatus.DONE) {
-        this.logUserDeleteAudit(
-          'DELETE',
-          String(user.userId),
-          String(user.userId),
+        this.logUserDeleteAudit({
+          actorUserId: String(user.userId),
+          targetUserId: String(user.userId),
           operationType,
-          HttpStatus.OK,
-        );
+          status: HttpStatus.OK,
+        });
       } else if (job.status === DeletionJobStatus.FAILED) {
-        this.logUserDeleteAudit(
-          'DELETE',
-          String(user.userId),
-          String(user.userId),
+        this.logUserDeleteAudit({
+          actorUserId: String(user.userId),
+          targetUserId: String(user.userId),
           operationType,
-          HttpStatus.INTERNAL_SERVER_ERROR,
-        );
+          status: HttpStatus.INTERNAL_SERVER_ERROR,
+        });
       }
     }
   }

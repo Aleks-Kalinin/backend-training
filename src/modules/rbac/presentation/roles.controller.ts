@@ -91,11 +91,11 @@ export class RolesController {
     @Body() updateRoleDto: UpdateRoleDto,
     @Req() req: AuthenticatedRequest,
   ): Promise<RoleResponseDto> {
-    const role = await this.rolesService.update(
+    const role = await this.rolesService.update({
       id,
       updateRoleDto,
-      req.user.sub,
-    );
+      actorUserId: req.user.sub,
+    });
     return RoleResponseDto.fromEntity(role);
   }
 

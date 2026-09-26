@@ -172,10 +172,10 @@ describe('AuthService', () => {
         status: UserStatus.PENDING,
       }),
     );
-    expect(verificationService.createVerificationRecord).toHaveBeenCalledWith(
-      'user-id',
-      VerificationTokenType.REGISTRATION,
-    );
+    expect(verificationService.createVerificationRecord).toHaveBeenCalledWith({
+      userId: 'user-id',
+      type: VerificationTokenType.REGISTRATION,
+    });
     expect(result).toEqual({
       statusCode: HttpStatus.ACCEPTED,
       data: {
@@ -214,10 +214,10 @@ describe('AuthService', () => {
 
     const result = await service.signIn('user@example.com', 'Password123');
 
-    expect(verificationService.createVerificationRecord).toHaveBeenCalledWith(
-      'user-id',
-      VerificationTokenType.LOGIN,
-    );
+    expect(verificationService.createVerificationRecord).toHaveBeenCalledWith({
+      userId: 'user-id',
+      type: VerificationTokenType.LOGIN,
+    });
     expect(mailService.sendVerificationOtp).toHaveBeenCalledWith(
       'user@example.com',
       '654321',
@@ -264,11 +264,11 @@ describe('AuthService', () => {
 
     const result = await service.verifyLogin('login-attempt-id', '654321');
 
-    expect(verificationService.verifyOtp).toHaveBeenCalledWith(
-      'login-attempt-id',
-      '654321',
-      VerificationTokenType.LOGIN,
-    );
+    expect(verificationService.verifyOtp).toHaveBeenCalledWith({
+      attemptId: 'login-attempt-id',
+      inputOtp: '654321',
+      expectedType: VerificationTokenType.LOGIN,
+    });
     expect(tokenService.generateTokenPair).toHaveBeenCalled();
     expect(result).toEqual({
       tokens: {

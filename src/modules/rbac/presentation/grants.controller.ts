@@ -91,11 +91,11 @@ export class GrantsController {
     @Body() updateGrantDto: UpdateGrantDto,
     @Req() req: AuthenticatedRequest,
   ): Promise<GrantResponseDto> {
-    const grant = await this.grantsService.update(
+    const grant = await this.grantsService.update({
       id,
       updateGrantDto,
-      req.user.sub,
-    );
+      actorUserId: req.user.sub,
+    });
     return GrantResponseDto.fromEntity(grant);
   }
 

@@ -84,23 +84,34 @@ describe('ConversionService', () => {
         {
           provide: CONVERSION_ENGINE,
           useValue: {
-            convertText: (
-              buffer: Buffer,
-              originalFormat: string,
-              targetFormat: string,
-              signal?: AbortSignal,
-            ) =>
+            convertText: ({
+              buffer,
+              originalFormat,
+              targetFormat,
+              signal,
+            }: {
+              buffer: Buffer;
+              originalFormat: string;
+              targetFormat: string;
+              signal?: AbortSignal;
+            }) =>
               mockPiscinaRun(
                 { buffer, originalFormat, targetFormat },
                 { name: 'convertTextFile', signal },
               ),
-            convertImage: (
-              buffer: Buffer,
-              originalFormat: string,
-              targetFormat: string,
-              options: unknown,
-              signal?: AbortSignal,
-            ) =>
+            convertImage: ({
+              buffer,
+              originalFormat,
+              targetFormat,
+              options,
+              signal,
+            }: {
+              buffer: Buffer;
+              originalFormat: string;
+              targetFormat: string;
+              options: unknown;
+              signal?: AbortSignal;
+            }) =>
               mockPiscinaRun(
                 { buffer, originalFormat, targetFormat, options },
                 { name: 'convertImageFile', signal },
@@ -202,7 +213,11 @@ describe('ConversionService', () => {
         .fn()
         .mockReturnValue(mockQueryBuilder);
 
-      const result = await service.getHistory(mockUserId, mockTargetId, {});
+      const result = await service.getHistory({
+        userId: mockUserId,
+        targetUserId: mockTargetId,
+        query: {},
+      });
       expect(result).toEqual({ items: mockHistory, nextCursor: null });
       expect(
         transformationHistoryRepository.createQueryBuilder,
@@ -301,11 +316,11 @@ describe('ConversionService', () => {
         },
       ]);
 
-      const result = await service.convertMultipartRequest(
+      const result = await service.convertMultipartRequest({
         req,
-        FILE_TYPE.IMAGE,
-        mockUserId,
-      );
+        fileType: FILE_TYPE.IMAGE,
+        userId: mockUserId,
+      });
 
       expect(result).toEqual({
         content: convertedBuffer,
@@ -363,11 +378,11 @@ describe('ConversionService', () => {
         },
       ]);
 
-      const result = await service.convertMultipartRequest(
+      const result = await service.convertMultipartRequest({
         req,
-        FILE_TYPE.TEXT,
-        mockUserId,
-      );
+        fileType: FILE_TYPE.TEXT,
+        userId: mockUserId,
+      });
 
       expect(result).toEqual({
         content: convertedContent,
@@ -408,11 +423,11 @@ describe('ConversionService', () => {
         },
       ]);
 
-      const result = await service.convertMultipartRequest(
+      const result = await service.convertMultipartRequest({
         req,
-        FILE_TYPE.IMAGE,
-        mockUserId,
-      );
+        fileType: FILE_TYPE.IMAGE,
+        userId: mockUserId,
+      });
       await new Promise((resolve) => setTimeout(resolve, 0));
 
       expect(result.content).toBe(convertedBuffer);
@@ -451,7 +466,11 @@ describe('ConversionService', () => {
         },
       ]);
 
-      await service.convertMultipartRequest(req, FILE_TYPE.IMAGE, mockUserId);
+      await service.convertMultipartRequest({
+        req,
+        fileType: FILE_TYPE.IMAGE,
+        userId: mockUserId,
+      });
       await new Promise((resolve) => setTimeout(resolve, 0));
 
       expect(convertedFileRepository.save).toHaveBeenCalled();
@@ -478,11 +497,11 @@ describe('ConversionService', () => {
         },
       ]);
 
-      const result = await service.convertMultipartRequest(
+      const result = await service.convertMultipartRequest({
         req,
-        FILE_TYPE.IMAGE,
-        mockUserId,
-      );
+        fileType: FILE_TYPE.IMAGE,
+        userId: mockUserId,
+      });
 
       expect(result).toEqual({
         content: mockFileBuffer,
@@ -516,7 +535,11 @@ describe('ConversionService', () => {
       ]);
 
       await expect(
-        service.convertMultipartRequest(req, FILE_TYPE.IMAGE, mockUserId),
+        service.convertMultipartRequest({
+          req,
+          fileType: FILE_TYPE.IMAGE,
+          userId: mockUserId,
+        }),
       ).rejects.toThrow(BadRequestException);
 
       expect(transformationHistoryRepository.save).toHaveBeenCalledWith(
@@ -548,7 +571,11 @@ describe('ConversionService', () => {
       ]);
 
       await expect(
-        service.convertMultipartRequest(req, FILE_TYPE.IMAGE, mockUserId),
+        service.convertMultipartRequest({
+          req,
+          fileType: FILE_TYPE.IMAGE,
+          userId: mockUserId,
+        }),
       ).rejects.toThrow(PayloadTooLargeException);
 
       expect(transformationHistoryRepository.save).toHaveBeenCalledWith(
@@ -579,7 +606,11 @@ describe('ConversionService', () => {
       ]);
 
       await expect(
-        service.convertMultipartRequest(req, FILE_TYPE.IMAGE, mockUserId),
+        service.convertMultipartRequest({
+          req,
+          fileType: FILE_TYPE.IMAGE,
+          userId: mockUserId,
+        }),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -593,7 +624,11 @@ describe('ConversionService', () => {
       ]);
 
       await expect(
-        service.convertMultipartRequest(req, FILE_TYPE.IMAGE, mockUserId),
+        service.convertMultipartRequest({
+          req,
+          fileType: FILE_TYPE.IMAGE,
+          userId: mockUserId,
+        }),
       ).rejects.toThrow(new BadRequestException('File is required'));
     });
 
@@ -609,7 +644,11 @@ describe('ConversionService', () => {
       ]);
 
       await expect(
-        service.convertMultipartRequest(req, FILE_TYPE.IMAGE, mockUserId),
+        service.convertMultipartRequest({
+          req,
+          fileType: FILE_TYPE.IMAGE,
+          userId: mockUserId,
+        }),
       ).rejects.toThrow(
         new BadRequestException('targetFormat field is required'),
       );
@@ -632,7 +671,11 @@ describe('ConversionService', () => {
       ]);
 
       await expect(
-        service.convertMultipartRequest(req, FILE_TYPE.IMAGE, mockUserId),
+        service.convertMultipartRequest({
+          req,
+          fileType: FILE_TYPE.IMAGE,
+          userId: mockUserId,
+        }),
       ).rejects.toThrow(new BadRequestException('File is empty'));
     });
 
@@ -653,7 +696,11 @@ describe('ConversionService', () => {
       ]);
 
       await expect(
-        service.convertMultipartRequest(req, FILE_TYPE.IMAGE, mockUserId),
+        service.convertMultipartRequest({
+          req,
+          fileType: FILE_TYPE.IMAGE,
+          userId: mockUserId,
+        }),
       ).rejects.toThrow(
         new UnsupportedMediaTypeException('Unsupported source format'),
       );
@@ -672,7 +719,11 @@ describe('ConversionService', () => {
       ]);
 
       await expect(
-        service.convertMultipartRequest(req, FILE_TYPE.IMAGE, mockUserId),
+        service.convertMultipartRequest({
+          req,
+          fileType: FILE_TYPE.IMAGE,
+          userId: mockUserId,
+        }),
       ).rejects.toThrow(
         new UnsupportedMediaTypeException('Invalid target format'),
       );
@@ -698,7 +749,11 @@ describe('ConversionService', () => {
       ]);
 
       await expect(
-        service.convertMultipartRequest(req, FILE_TYPE.IMAGE, mockUserId),
+        service.convertMultipartRequest({
+          req,
+          fileType: FILE_TYPE.IMAGE,
+          userId: mockUserId,
+        }),
       ).rejects.toThrow(
         new PayloadTooLargeException('File size exceeds global upload limit'),
       );
@@ -725,7 +780,11 @@ describe('ConversionService', () => {
       ]);
 
       await expect(
-        service.convertMultipartRequest(req, FILE_TYPE.IMAGE, mockUserId),
+        service.convertMultipartRequest({
+          req,
+          fileType: FILE_TYPE.IMAGE,
+          userId: mockUserId,
+        }),
       ).rejects.toThrow(
         new RequestTimeoutException(
           'File conversion timed out after 30 seconds',
@@ -759,7 +818,11 @@ describe('ConversionService', () => {
       ]);
 
       await expect(
-        service.convertMultipartRequest(req, FILE_TYPE.IMAGE, mockUserId),
+        service.convertMultipartRequest({
+          req,
+          fileType: FILE_TYPE.IMAGE,
+          userId: mockUserId,
+        }),
       ).rejects.toThrow(new BadRequestException('File conversion failed'));
     });
 
@@ -790,11 +853,11 @@ describe('ConversionService', () => {
         },
       ]);
 
-      const result = await service.convertMultipartRequest(
+      const result = await service.convertMultipartRequest({
         req,
-        FILE_TYPE.IMAGE,
-        mockUserId,
-      );
+        fileType: FILE_TYPE.IMAGE,
+        userId: mockUserId,
+      });
 
       expect(result.targetFormat).toBe(ImageFileFormat.PNG);
       expect(loggerSpy).toHaveBeenCalledWith(

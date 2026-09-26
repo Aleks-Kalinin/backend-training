@@ -41,11 +41,15 @@ export class AuthController {
   /**
    * Sets both access and refresh token cookies on the reply.
    */
-  private setAuthCookies(
-    reply: FastifyReply,
-    accessToken: string,
-    refreshToken: string,
-  ): void {
+  private setAuthCookies({
+    reply,
+    accessToken,
+    refreshToken,
+  }: {
+    reply: FastifyReply;
+    accessToken: string;
+    refreshToken: string;
+  }): void {
     reply.setCookie(AUTH_COOKIES.ACCESS_TOKEN, accessToken, {
       ...BASE_COOKIE_OPTIONS,
       maxAge: TOKEN_TTL.ACCESS_TOKEN_SECONDS,
@@ -103,11 +107,11 @@ export class AuthController {
       return result.data;
     }
 
-    this.setAuthCookies(
+    this.setAuthCookies({
       reply,
-      result.tokens.accessToken,
-      result.tokens.refreshToken,
-    );
+      accessToken: result.tokens.accessToken,
+      refreshToken: result.tokens.refreshToken,
+    });
     return { message: 'Login successful' };
   }
 
@@ -140,7 +144,11 @@ export class AuthController {
       verifyRegistrationDto.attemptId,
       verifyRegistrationDto.otp,
     );
-    this.setAuthCookies(reply, tokens.accessToken, tokens.refreshToken);
+    this.setAuthCookies({
+      reply,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+    });
     return { message: 'Login verified successfully' };
   }
 
@@ -178,11 +186,11 @@ export class AuthController {
     reply.status(result.statusCode);
 
     if (result.statusCode === HttpStatus.CREATED) {
-      this.setAuthCookies(
+      this.setAuthCookies({
         reply,
-        result.tokens.accessToken,
-        result.tokens.refreshToken,
-      );
+        accessToken: result.tokens.accessToken,
+        refreshToken: result.tokens.refreshToken,
+      });
       return { message: 'Registration successful', user: result.data.user };
     }
 
@@ -218,7 +226,11 @@ export class AuthController {
       verifyRegistrationDto.attemptId,
       verifyRegistrationDto.otp,
     );
-    this.setAuthCookies(reply, tokens.accessToken, tokens.refreshToken);
+    this.setAuthCookies({
+      reply,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+    });
     return { message: 'Email verified successfully' };
   }
 
@@ -253,7 +265,11 @@ export class AuthController {
     }
 
     const { tokens } = await this.authService.refresh(refreshToken);
-    this.setAuthCookies(reply, tokens.accessToken, tokens.refreshToken);
+    this.setAuthCookies({
+      reply,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+    });
     return { message: 'Tokens refreshed successfully' };
   }
 

@@ -50,11 +50,27 @@ describe('RbacCacheService', () => {
 
       expect(grantRepository.findForCache).toHaveBeenCalled();
 
-      expect(service.hasPermission(['admin'], 'users', 'create')).toBe(true);
-      expect(service.hasPermission(['admin'], 'users', 'delete')).toBe(false);
-      expect(service.hasPermission(['user'], 'profile', 'any-action')).toBe(
-        true,
-      );
+      expect(
+        service.hasPermission({
+          userRoles: ['admin'],
+          requiredPermission: 'users',
+          requiredAction: 'create',
+        }),
+      ).toBe(true);
+      expect(
+        service.hasPermission({
+          userRoles: ['admin'],
+          requiredPermission: 'users',
+          requiredAction: 'delete',
+        }),
+      ).toBe(false);
+      expect(
+        service.hasPermission({
+          userRoles: ['user'],
+          requiredPermission: 'profile',
+          requiredAction: 'any-action',
+        }),
+      ).toBe(true);
     });
 
     it('reloads cache on rbac.changed event', async () => {
@@ -70,7 +86,13 @@ describe('RbacCacheService', () => {
       await service.handleRbacChanged();
 
       expect(grantRepository.findForCache).toHaveBeenCalled();
-      expect(service.hasPermission(['admin'], 'reports', 'read')).toBe(true);
+      expect(
+        service.hasPermission({
+          userRoles: ['admin'],
+          requiredPermission: 'reports',
+          requiredAction: 'read',
+        }),
+      ).toBe(true);
     });
 
     it('skips grants with missing role or permission relation', async () => {
@@ -91,7 +113,13 @@ describe('RbacCacheService', () => {
 
       await service.onModuleInit();
 
-      expect(service.hasPermission(['admin'], 'reports', 'read')).toBe(false);
+      expect(
+        service.hasPermission({
+          userRoles: ['admin'],
+          requiredPermission: 'reports',
+          requiredAction: 'read',
+        }),
+      ).toBe(false);
     });
 
     it('catches and logs errors during cache reloading silently', async () => {
@@ -131,40 +159,86 @@ describe('RbacCacheService', () => {
     });
 
     it('returns false if userRoles is null, undefined, or empty array', () => {
-      expect(service.hasPermission(null as any, 'users', 'read')).toBe(false);
-      expect(service.hasPermission(undefined as any, 'users', 'read')).toBe(
-        false,
-      );
-      expect(service.hasPermission([], 'users', 'read')).toBe(false);
+      expect(
+        service.hasPermission({
+          userRoles: null as any,
+          requiredPermission: 'users',
+          requiredAction: 'read',
+        }),
+      ).toBe(false);
+      expect(
+        service.hasPermission({
+          userRoles: undefined as any,
+          requiredPermission: 'users',
+          requiredAction: 'read',
+        }),
+      ).toBe(false);
+      expect(
+        service.hasPermission({
+          userRoles: [],
+          requiredPermission: 'users',
+          requiredAction: 'read',
+        }),
+      ).toBe(false);
     });
 
     it('returns false if user has no matching role in cache', () => {
-      expect(service.hasPermission(['guest'], 'users', 'read')).toBe(false);
+      expect(
+        service.hasPermission({
+          userRoles: ['guest'],
+          requiredPermission: 'users',
+          requiredAction: 'read',
+        }),
+      ).toBe(false);
     });
 
     it('returns false if requested permission is not granted to role', () => {
-      expect(service.hasPermission(['editor'], 'users', 'read')).toBe(false);
+      expect(
+        service.hasPermission({
+          userRoles: ['editor'],
+          requiredPermission: 'users',
+          requiredAction: 'read',
+        }),
+      ).toBe(false);
     });
 
     it('returns true when granted actions is wildcard (*)', () => {
-      expect(service.hasPermission(['admin'], 'users', 'delete')).toBe(true);
+      expect(
+        service.hasPermission({
+          userRoles: ['admin'],
+          requiredPermission: 'users',
+          requiredAction: 'delete',
+        }),
+      ).toBe(true);
     });
 
     it('returns true when action is listed in granted actions array', () => {
-      expect(service.hasPermission(['editor'], 'articles', 'update')).toBe(
-        true,
-      );
+      expect(
+        service.hasPermission({
+          userRoles: ['editor'],
+          requiredPermission: 'articles',
+          requiredAction: 'update',
+        }),
+      ).toBe(true);
     });
 
     it('returns false when action is not in granted actions array', () => {
-      expect(service.hasPermission(['editor'], 'articles', 'delete')).toBe(
-        false,
-      );
+      expect(
+        service.hasPermission({
+          userRoles: ['editor'],
+          requiredPermission: 'articles',
+          requiredAction: 'delete',
+        }),
+      ).toBe(false);
     });
 
     it('checks multiple roles for permission until match is found', () => {
       expect(
-        service.hasPermission(['guest', 'editor'], 'articles', 'update'),
+        service.hasPermission({
+          userRoles: ['guest', 'editor'],
+          requiredPermission: 'articles',
+          requiredAction: 'update',
+        }),
       ).toBe(true);
     });
   });

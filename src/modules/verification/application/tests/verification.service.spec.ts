@@ -85,10 +85,10 @@ describe('VerificationService', () => {
   });
 
   it('persists a hashed 6-digit registration OTP', async () => {
-    const result = await service.createVerificationRecord(
-      'user-id',
-      VerificationTokenType.REGISTRATION,
-    );
+    const result = await service.createVerificationRecord({
+      userId: 'user-id',
+      type: VerificationTokenType.REGISTRATION,
+    });
 
     expect(result.attemptId).toBe('attempt-id');
     expect(result.rawOtp).toMatch(/^\d{6}$/);
@@ -117,10 +117,10 @@ describe('VerificationService', () => {
       )
       .mockImplementation(() => {});
 
-    const result = await service.createVerificationRecord(
-      'user-id',
-      VerificationTokenType.REGISTRATION,
-    );
+    const result = await service.createVerificationRecord({
+      userId: 'user-id',
+      type: VerificationTokenType.REGISTRATION,
+    });
 
     expect(debugSpy).toHaveBeenCalledWith(
       expect.stringContaining(result.rawOtp),
@@ -141,7 +141,10 @@ describe('VerificationService', () => {
       updatedAt: new Date(),
     });
 
-    const result = await service.verifyOtp('attempt-id', '123456');
+    const result = await service.verifyOtp({
+      attemptId: 'attempt-id',
+      inputOtp: '123456',
+    });
     expect(result.userId).toBe('user-id');
     expect(repository.save).toHaveBeenCalledWith(
       expect.objectContaining({ consumedAt: expect.any(Date) }),
@@ -163,7 +166,7 @@ describe('VerificationService', () => {
     });
 
     await expect(
-      service.verifyOtp('attempt-id', '654321'),
+      service.verifyOtp({ attemptId: 'attempt-id', inputOtp: '654321' }),
     ).rejects.toMatchObject({} satisfies Partial<HttpException>);
     expect(repository.save).toHaveBeenCalledWith(
       expect.objectContaining({ attempts: 5 }),
@@ -174,7 +177,7 @@ describe('VerificationService', () => {
     repository.findActive.mockResolvedValue(null);
 
     await expect(
-      service.verifyOtp('attempt-id', '123456'),
+      service.verifyOtp({ attemptId: 'attempt-id', inputOtp: '123456' }),
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
   });
 });
