@@ -72,7 +72,7 @@ There are currently no TypeORM migration files, so the test database uses `POSTG
 | Purpose       | Library                  |
 |---------------|--------------------------|
 | HTTP          | Fastify (`@nestjs/platform-fastify`) |
-| Validation    | Joi                      |
+| Validation    | class-validator          |
 | ORM           | TypeORM (`@nestjs/typeorm`) |
 | Database      | PostgreSQL (`pg`)        |
 

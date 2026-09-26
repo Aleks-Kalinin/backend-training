@@ -1,7 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { ConfigModule as NestConfigModule } from '@nestjs/config';
 import { ConfigService } from './config.service';
-import { configValidationSchema } from './config.validation';
+import { validateConfig } from './config.validation';
 
 @Global()
 @Module({
@@ -9,7 +9,7 @@ import { configValidationSchema } from './config.validation';
     NestConfigModule.forRoot({
       isGlobal: true,
       envFilePath: process.env.NODE_ENV === 'test' ? '.env.test' : '.env',
-      validationSchema: configValidationSchema,
+      validate: validateConfig,
     }),
   ],
   providers: [ConfigService],
