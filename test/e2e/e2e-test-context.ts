@@ -18,6 +18,8 @@ import {
   StorageDriver,
 } from 'typeorm-transactional';
 import { ConfigService } from '../../src/core/config/config.service';
+import { API_BASE_PATH, configureApiRouting } from '../../src/core/api-routing';
+import { configureSwagger } from '../../src/core/swagger';
 import { AppModule } from '../../src/core/app/app.module';
 import { CONVERSION_ENGINE } from '../../src/modules/conversion/application/ports/conversion-engine.port';
 import { Grant } from '../../src/modules/rbac/infrastructure/entities/grant.entity';
@@ -176,7 +178,7 @@ export function createE2eTestContext(): E2eTestContext {
     path: string,
   ): request.Test {
     return request(app.getHttpServer())
-      [method](path)
+      [method](`${API_BASE_PATH}${path}`)
       .set('Cookie', `access_token=${makeToken(testUsers.admin)}`);
   }
 
@@ -185,7 +187,7 @@ export function createE2eTestContext(): E2eTestContext {
     path: string,
   ): request.Test {
     return request(app.getHttpServer())
-      [method](path)
+      [method](`${API_BASE_PATH}${path}`)
       .set('Cookie', `access_token=${makeToken(testUsers.user)}`);
   }
 
@@ -197,11 +199,15 @@ export function createE2eTestContext(): E2eTestContext {
     })
       .overrideProvider(CONVERSION_ENGINE)
       .useValue({
-        convertText: async (
-          buffer: Buffer,
-          sourceFormat: string,
-          targetFormat: string,
-        ) => {
+        convertText: async ({
+          buffer,
+          originalFormat: sourceFormat,
+          targetFormat,
+        }: {
+          buffer: Buffer;
+          originalFormat: string;
+          targetFormat: string;
+        }) => {
           if (sourceFormat !== 'csv' || targetFormat !== 'json') {
             throw new Error('Unsupported test conversion');
           }
@@ -222,6 +228,8 @@ export function createE2eTestContext(): E2eTestContext {
     app = moduleFixture.createNestApplication<NestFastifyApplication>(
       new FastifyAdapter(),
     );
+    configureApiRouting(app);
+    configureSwagger(app);
     dataSource = app.get(DataSource);
     jwtService = app.get(JwtService);
 

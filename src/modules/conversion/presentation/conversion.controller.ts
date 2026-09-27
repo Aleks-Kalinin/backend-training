@@ -61,7 +61,7 @@ export class ConversionController {
     );
   }
 
-  @Post('api/convert')
+  @Post('convert')
   @ApiOperation({
     summary: 'Convert text file',
     description:
@@ -161,7 +161,7 @@ export class ConversionController {
     return content;
   }
 
-  @Get('api/convert/formats')
+  @Get('convert/formats')
   @ApiOperation({
     summary: 'Get available text conversion formats',
     description: 'Returns supported source to target text format mappings.',
@@ -208,7 +208,7 @@ export class ConversionController {
     ];
   }
 
-  @Post('api/images/convert')
+  @Post('images/convert')
   @ApiOperation({
     summary: 'Convert image file',
     description:
@@ -330,7 +330,7 @@ export class ConversionController {
     return content;
   }
 
-  @Get('api/images/convert/formats')
+  @Get('images/convert/formats')
   @ApiOperation({
     summary: 'Get available image conversion formats',
     description: 'Returns supported source to target image format mappings.',
@@ -375,7 +375,7 @@ export class ConversionController {
     ];
   }
 
-  @Get('api/transformations/history')
+  @Get('transformations/history')
   @ApiOperation({
     summary: 'Get transformation history',
     description:
@@ -509,7 +509,7 @@ export class ConversionController {
     });
   }
 
-  @Get('api/transformations/history/:itemId/download')
+  @Get('transformations/history/:itemId/download')
   @ApiOperation({
     summary: 'Download self-transformed file',
     description:

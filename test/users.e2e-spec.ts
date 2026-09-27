@@ -3,13 +3,14 @@ import { createE2eTestContext } from './e2e/e2e-test-context';
 import { User } from '../src/modules/users/infrastructure/entity/user.entity';
 import { UserStatus } from '../src/modules/users/domain/user-status.enum';
 import { UserDeletionJob } from '../src/modules/users/infrastructure/entity/user-deletion-job.entity';
+import { API_BASE_PATH } from '../src/core/api-routing';
 
 describe('Users HTTP e2e', () => {
   const context = createE2eTestContext();
 
   it('requires authentication and returns a user profile to its owner', async () => {
     await request(context.app.getHttpServer())
-      .get(`/users/${context.testUsers.user.userId}`)
+      .get(`${API_BASE_PATH}/users/${context.testUsers.user.userId}`)
       .expect(401);
 
     const profile = await context

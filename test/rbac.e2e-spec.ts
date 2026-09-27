@@ -2,13 +2,14 @@ import request from 'supertest';
 import { createE2eTestContext } from './e2e/e2e-test-context';
 import { Grant } from '../src/modules/rbac/infrastructure/entities/grant.entity';
 import { SystemRole } from '../src/modules/rbac/domain/system-role.enum';
+import { API_BASE_PATH } from '../src/core/api-routing';
 
 describe('RBAC HTTP e2e', () => {
   const context = createE2eTestContext();
 
   it('requires authentication and permissions for role administration', async () => {
     await request(context.app.getHttpServer())
-      .get('/admin/rbac/roles')
+      .get(`${API_BASE_PATH}/admin/rbac/roles`)
       .expect(401);
 
     await context.asUser('get', '/admin/rbac/roles').expect(403);

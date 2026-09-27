@@ -5,6 +5,7 @@ import { User } from '../src/modules/users/infrastructure/entity/user.entity';
 import { UserStatus } from '../src/modules/users/domain/user-status.enum';
 import { SystemRole } from '../src/modules/rbac/domain/system-role.enum';
 import request from 'supertest';
+import { API_BASE_PATH } from '../src/core/api-routing';
 import { createE2eTestContext } from './e2e/e2e-test-context';
 
 describe('Authentication HTTP e2e', () => {
@@ -12,7 +13,7 @@ describe('Authentication HTTP e2e', () => {
 
   it('signs up and logs in with secure authentication cookies', async () => {
     const signup = await request(context.app.getHttpServer())
-      .post('/auth/signup')
+      .post(`${API_BASE_PATH}/auth/signup`)
       .send({ email: 'NewUser@Example.test', password: 'Password123' })
       .expect(201);
 
@@ -29,7 +30,7 @@ describe('Authentication HTTP e2e', () => {
     expect(context.cookieText(signup)).toContain('Secure');
 
     await request(context.app.getHttpServer())
-      .post('/auth/login')
+      .post(`${API_BASE_PATH}/auth/login`)
       .send({ email: 'NEWUSER@example.test', password: 'Password123' })
       .expect(200)
       .expect((response) => {
@@ -39,17 +40,17 @@ describe('Authentication HTTP e2e', () => {
 
   it('validates signup data and rejects duplicate accounts and bad credentials', async () => {
     await request(context.app.getHttpServer())
-      .post('/auth/signup')
+      .post(`${API_BASE_PATH}/auth/signup`)
       .send({ email: 'not-an-email', password: 'short' })
       .expect(400);
 
     await request(context.app.getHttpServer())
-      .post('/auth/signup')
+      .post(`${API_BASE_PATH}/auth/signup`)
       .send({ email: 'admin@example.test', password: 'Password123' })
       .expect(409);
 
     await request(context.app.getHttpServer())
-      .post('/auth/login')
+      .post(`${API_BASE_PATH}/auth/login`)
       .send({ email: 'admin@example.test', password: 'wrong-password' })
       .expect(401);
   });
@@ -61,7 +62,7 @@ describe('Authentication HTTP e2e', () => {
     });
 
     const signup = await request(context.app.getHttpServer())
-      .post('/auth/signup')
+      .post(`${API_BASE_PATH}/auth/signup`)
       .send({ email: 'pending@example.test', password: 'Password123' })
       .expect(202);
 
@@ -72,7 +73,7 @@ describe('Authentication HTTP e2e', () => {
     expect(context.sentOtps).toHaveLength(1);
 
     const verified = await request(context.app.getHttpServer())
-      .post('/auth/signup/verify')
+      .post(`${API_BASE_PATH}/auth/signup/verify`)
       .send({ attemptId: signup.body.attemptId, otp: context.sentOtps[0].otp })
       .expect(200);
 
@@ -98,17 +99,17 @@ describe('Authentication HTTP e2e', () => {
     );
 
     const refreshed = await request(context.app.getHttpServer())
-      .post('/auth/refresh')
+      .post(`${API_BASE_PATH}/auth/refresh`)
       .set('Cookie', `refresh_token=${refreshToken}`)
       .expect(200);
     expect(context.cookieText(refreshed)).toContain('access_token=');
 
     await request(context.app.getHttpServer())
-      .post('/auth/refresh')
+      .post(`${API_BASE_PATH}/auth/refresh`)
       .expect(401);
 
     const loggedOut = await request(context.app.getHttpServer())
-      .post('/auth/logout')
+      .post(`${API_BASE_PATH}/auth/logout`)
       .expect(200);
     expect(loggedOut.body.message).toBe('Logged out successfully');
     expect(context.cookieText(loggedOut)).toContain('access_token=;');

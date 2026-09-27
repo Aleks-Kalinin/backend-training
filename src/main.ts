@@ -9,12 +9,13 @@ import {
   FastifyAdapter,
   NestFastifyApplication,
 } from '@nestjs/platform-fastify';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import {
   initializeTransactionalContext,
   StorageDriver,
 } from 'typeorm-transactional';
 import { AppModule } from './core/app/app.module';
+import { configureApiRouting } from './core/api-routing';
+import { configureSwagger } from './core/swagger';
 import { GLOBAL_MAX_FILE_SIZE } from './modules/conversion/application/constants/file-size-limit';
 
 async function bootstrap() {
@@ -24,6 +25,8 @@ async function bootstrap() {
     AppModule,
     new FastifyAdapter(),
   );
+
+  configureApiRouting(app);
 
   await app.register(fastifyHelmet, {
     // Nest Swagger UI uses an inline bootstrap script.
@@ -62,40 +65,7 @@ async function bootstrap() {
 
   await app.register(compression);
 
-  const config = new DocumentBuilder()
-    .setTitle('Backend Training API')
-    .setDescription(
-      'REST API documentation for Backend Training project including Authentication, RBAC, Users Management, Settings, Health, and File Conversion services.',
-    )
-    .setVersion('1.0.0')
-    .addBearerAuth(
-      {
-        type: 'http',
-        scheme: 'bearer',
-        bearerFormat: 'JWT',
-        name: 'Authorization',
-        description: 'Enter JWT access token',
-        in: 'header',
-      },
-      'bearer',
-    )
-    .addCookieAuth('access_token', {
-      type: 'apiKey',
-      in: 'cookie',
-      name: 'access_token',
-      description: 'JWT access token (HttpOnly cookie)',
-    })
-    .addCookieAuth('refresh_token', {
-      type: 'apiKey',
-      in: 'cookie',
-      name: 'refresh_token',
-      description: 'JWT refresh token (HttpOnly cookie)',
-    })
-    .build();
-
-  const document = SwaggerModule.createDocument(app, config);
-
-  SwaggerModule.setup('api', app, document);
+  configureSwagger(app);
 
   const port = configService.get('PORT');
 

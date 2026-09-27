@@ -27,6 +27,18 @@ src/
 └── main.ts          # Entry point
 ```
 
+## API and Swagger
+
+All HTTP API routes use URI versioning under `/api/v1` (for example,
+`http://localhost:3007/api/v1/auth/login` and
+`http://localhost:3007/api/v1/health`). Swagger UI is available at
+`http://localhost:3007/docs`; its OpenAPI JSON document is at
+`http://localhost:3007/docs-json`.
+
+When adding endpoints, do not repeat the `/api` prefix in controller paths.
+The current default API version is `1`; introduce a new version when making
+breaking API changes and keep older versions available during migration.
+
 ## Database
 
 PostgreSQL and TypeORM are already wired in. Use them for new modules — no extra setup.
