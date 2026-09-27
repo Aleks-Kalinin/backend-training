@@ -116,10 +116,7 @@ export class GrantsController {
   @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'Forbidden' })
   @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'Grant not found' })
   @RequirePermission('grants', 'delete')
-  async remove(
-    @Param('id') id: string,
-    @Req() req: AuthenticatedRequest,
-  ): Promise<void> {
+  async remove(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
     await this.grantsService.remove(id, req.user.sub);
   }
 }

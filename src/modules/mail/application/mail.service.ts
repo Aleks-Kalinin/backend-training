@@ -11,7 +11,7 @@ export class MailService {
     private readonly transport: MailTransport,
   ) {}
 
-  async sendVerificationOtp(toEmail: string, otp: string): Promise<void> {
+  async sendVerificationOtp(toEmail: string, otp: string) {
     try {
       await this.transport.send({
         to: toEmail,

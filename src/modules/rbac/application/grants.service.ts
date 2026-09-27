@@ -186,7 +186,7 @@ export class GrantsService {
     return updatedGrant;
   }
 
-  async remove(id: string, actorUserId: UUID): Promise<void> {
+  async remove(id: string, actorUserId: UUID) {
     const grant = await this.findOne(id, actorUserId);
     await this.grantRepository.remove(grant);
     this.eventEmitter.changed();

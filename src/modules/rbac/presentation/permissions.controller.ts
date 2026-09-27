@@ -127,10 +127,7 @@ export class PermissionsController {
     description: 'Permission not found',
   })
   @RequirePermission('permissions', 'delete')
-  async remove(
-    @Param('id') id: string,
-    @Req() req: AuthenticatedRequest,
-  ): Promise<void> {
+  async remove(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
     await this.permissionsService.remove(id, req.user.sub);
   }
 }

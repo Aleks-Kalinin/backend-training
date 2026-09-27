@@ -23,7 +23,7 @@ export class TypeOrmVerificationRepository implements VerificationRepository {
     userId,
     type,
     consumedAt,
-  }: ConsumeActiveForUserParams): Promise<void> {
+  }: ConsumeActiveForUserParams) {
     await this.repository.update(
       { userId, type, consumedAt: IsNull() },
       { consumedAt },

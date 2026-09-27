@@ -10,7 +10,7 @@ export function assertTestDatabaseTarget({
   nodeEnv,
   host,
   database,
-}: DatabaseTarget): void {
+}: DatabaseTarget) {
   if (nodeEnv !== 'test') {
     return;
   }

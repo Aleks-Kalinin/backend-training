@@ -119,7 +119,7 @@ export class ConversionService implements OnModuleDestroy {
     userId,
     fileSize,
     startTime,
-  }: EnqueueSavedFilePersistenceParams): void {
+  }: EnqueueSavedFilePersistenceParams) {
     void (async () => {
       try {
         const savedFile = await this.fileStorage.save(

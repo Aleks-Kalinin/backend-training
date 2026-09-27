@@ -40,7 +40,7 @@ export class PiscinaConversionEngine implements ConversionEngine {
     ) as Promise<Buffer>;
   }
 
-  close(): Promise<void> {
+  close() {
     return this.piscina.destroy();
   }
 }

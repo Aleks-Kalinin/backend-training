@@ -70,13 +70,11 @@ export function createE2eTestContext(): E2eTestContext {
   let jwtService: JwtService;
   let testUsers: TestUsers;
   const sentOtps: Array<{ email: string; otp: string }> = [];
-  const sendVerificationOtp = jest.fn(
-    async (email: string, otp: string): Promise<void> => {
-      sentOtps.push({ email, otp });
-    },
-  );
+  const sendVerificationOtp = jest.fn(async (email: string, otp: string) => {
+    sentOtps.push({ email, otp });
+  });
 
-  async function clearDatabase(): Promise<void> {
+  async function clearDatabase() {
     const tables: Array<{ tablename: string }> = await dataSource.query(
       `SELECT tablename
        FROM pg_tables
@@ -98,7 +96,7 @@ export function createE2eTestContext(): E2eTestContext {
     );
   }
 
-  async function seedDatabase(): Promise<void> {
+  async function seedDatabase() {
     await clearDatabase();
 
     const roles = dataSource.getRepository(Role);

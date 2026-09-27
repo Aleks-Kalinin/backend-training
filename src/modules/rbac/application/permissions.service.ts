@@ -128,7 +128,7 @@ export class PermissionsService {
     return updatedPermission;
   }
 
-  async remove(id: string, actorUserId): Promise<void> {
+  async remove(id: string, actorUserId) {
     const permission = await this.permissionRepository.findById(id, true);
 
     if (!permission) {

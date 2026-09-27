@@ -5,7 +5,7 @@ import { RbacEvents } from '../application/ports/rbac-events.port';
 @Injectable()
 export class RbacEventsAdapter implements RbacEvents {
   constructor(private readonly events: EventEmitter2) {}
-  changed(): void {
+  changed() {
     this.events.emit('rbac.changed');
   }
 }

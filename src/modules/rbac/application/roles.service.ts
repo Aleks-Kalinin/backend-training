@@ -108,7 +108,7 @@ export class RolesService {
     return updatedRole;
   }
 
-  async remove(id: string, actorUserId: UUID): Promise<void> {
+  async remove(id: string, actorUserId: UUID) {
     const role = await this.roleRepository.findById(id, true);
 
     if (!role) {

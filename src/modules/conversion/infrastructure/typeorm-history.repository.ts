@@ -73,7 +73,7 @@ export class TypeOrmHistoryRepository implements HistoryRepository {
     errorCode?: number | null;
     userId: string;
     fileId?: string | null;
-  }): Promise<void> {
+  }) {
     await this.repository.save(entry);
   }
 }

@@ -105,7 +105,7 @@ export class UsersService {
     targetUserId,
     fields,
     status,
-  }: UserUpdateAuditParams): void {
+  }: UserUpdateAuditParams) {
     this.logger.log(
       JSON.stringify({
         event: 'UPDATE',
@@ -122,7 +122,7 @@ export class UsersService {
     targetUserId,
     operationType,
     status,
-  }: UserDeleteAuditParams): void {
+  }: UserDeleteAuditParams) {
     this.logger.log(
       JSON.stringify({
         event: 'DELETE',

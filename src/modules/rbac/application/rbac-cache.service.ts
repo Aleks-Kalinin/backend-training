@@ -34,7 +34,7 @@ export class RbacCacheService implements OnModuleInit {
     await this.reloadCache();
   }
 
-  private async reloadCache(): Promise<void> {
+  private async reloadCache() {
     try {
       const grants = await this.grantRepository.findForCache();
 

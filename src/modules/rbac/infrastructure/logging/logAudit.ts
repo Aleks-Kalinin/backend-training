@@ -13,7 +13,7 @@ export interface AuditLogPayload {
 export class AuditLogger implements RbacAudit {
   private readonly logger = new Logger('Audit');
 
-  log(payload: AuditLogPayload): void {
+  log(payload: AuditLogPayload) {
     this.logger.log(JSON.stringify(payload));
   }
 }

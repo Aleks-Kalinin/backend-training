@@ -49,7 +49,7 @@ export class AuthController {
     reply: FastifyReply;
     accessToken: string;
     refreshToken: string;
-  }): void {
+  }) {
     reply.setCookie(AUTH_COOKIES.ACCESS_TOKEN, accessToken, {
       ...BASE_COOKIE_OPTIONS,
       maxAge: TOKEN_TTL.ACCESS_TOKEN_SECONDS,
@@ -63,7 +63,7 @@ export class AuthController {
   /**
    * Clears both auth cookies (used on logout).
    */
-  private clearAuthCookies(reply: FastifyReply): void {
+  private clearAuthCookies(reply: FastifyReply) {
     reply.clearCookie(AUTH_COOKIES.ACCESS_TOKEN, { path: '/' });
     reply.clearCookie(AUTH_COOKIES.REFRESH_TOKEN, { path: '/' });
   }
