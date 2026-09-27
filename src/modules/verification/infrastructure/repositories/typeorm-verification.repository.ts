@@ -6,7 +6,10 @@ import type {
   VerificationToken as DomainVerificationToken,
 } from '../../domain/verification-token.models';
 import type { VerificationTokenType } from '../../domain/verification-token-type.enum';
-import type { VerificationRepository } from '../../application/ports/verification-repository.port';
+import type {
+  ConsumeActiveForUserParams,
+  VerificationRepository,
+} from '../../application/ports/verification-repository.port';
 import { VerificationToken } from '../entity/verification-token.entity';
 
 @Injectable()
@@ -16,11 +19,11 @@ export class TypeOrmVerificationRepository implements VerificationRepository {
     private readonly repository: Repository<VerificationToken>,
   ) {}
 
-  async consumeActiveForUser(
-    userId: string,
-    type: VerificationTokenType,
-    consumedAt: Date,
-  ): Promise<void> {
+  async consumeActiveForUser({
+    userId,
+    type,
+    consumedAt,
+  }: ConsumeActiveForUserParams) {
     await this.repository.update(
       { userId, type, consumedAt: IsNull() },
       { consumedAt },

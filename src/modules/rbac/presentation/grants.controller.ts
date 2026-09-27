@@ -91,11 +91,11 @@ export class GrantsController {
     @Body() updateGrantDto: UpdateGrantDto,
     @Req() req: AuthenticatedRequest,
   ): Promise<GrantResponseDto> {
-    const grant = await this.grantsService.update(
+    const grant = await this.grantsService.update({
       id,
       updateGrantDto,
-      req.user.sub,
-    );
+      actorUserId: req.user.sub,
+    });
     return GrantResponseDto.fromEntity(grant);
   }
 
@@ -116,10 +116,7 @@ export class GrantsController {
   @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'Forbidden' })
   @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'Grant not found' })
   @RequirePermission('grants', 'delete')
-  async remove(
-    @Param('id') id: string,
-    @Req() req: AuthenticatedRequest,
-  ): Promise<void> {
+  async remove(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
     await this.grantsService.remove(id, req.user.sub);
   }
 }

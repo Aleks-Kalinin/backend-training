@@ -137,7 +137,11 @@ describe('RolesService', () => {
         .mockResolvedValueOnce({ id: 'r2', name: 'editor' } as Role); // for name check
 
       await expect(
-        service.update('r1', { name: 'editor' }, mockUserId),
+        service.update({
+          id: 'r1',
+          updateRoleDto: { name: 'editor' },
+          actorUserId: mockUserId,
+        }),
       ).rejects.toThrow(
         new ConflictException('Role with name editor already exists'),
       );
@@ -154,11 +158,11 @@ describe('RolesService', () => {
       roleRepository.findOne.mockResolvedValue(existingRole);
       roleRepository.save.mockResolvedValue(updatedRole);
 
-      const result = await service.update(
-        'r1',
-        { description: 'New' },
-        mockUserId,
-      );
+      const result = await service.update({
+        id: 'r1',
+        updateRoleDto: { description: 'New' },
+        actorUserId: mockUserId,
+      });
 
       expect(result).toBe(updatedRole);
       expect(eventEmitter.changed).toHaveBeenCalled();

@@ -31,7 +31,7 @@ export class NodemailerMailTransport implements MailTransport {
     this.transporter = createTransport(options);
   }
 
-  async send(message: MailMessage): Promise<void> {
+  async send(message: MailMessage) {
     await this.transporter.sendMail({
       ...message,
       from:

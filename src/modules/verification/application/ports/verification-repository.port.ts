@@ -6,12 +6,14 @@ import type { VerificationTokenType } from '../../domain/verification-token-type
 
 export const VERIFICATION_REPOSITORY = Symbol('VERIFICATION_REPOSITORY');
 
+export interface ConsumeActiveForUserParams {
+  userId: string;
+  type: VerificationTokenType;
+  consumedAt: Date;
+}
+
 export interface VerificationRepository {
-  consumeActiveForUser(
-    userId: string,
-    type: VerificationTokenType,
-    consumedAt: Date,
-  ): Promise<void>;
+  consumeActiveForUser(params: ConsumeActiveForUserParams): Promise<void>;
   create(token: NewVerificationToken): Promise<VerificationToken>;
   findActive(
     attemptId: string,

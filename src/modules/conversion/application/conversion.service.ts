@@ -50,6 +50,36 @@ interface createHistoryEntryParams {
   fileId: UUID | null;
 }
 
+interface LogConversionProcessParams {
+  actorUserId: UUID;
+  targetFormat: string;
+  sourceFormat: string;
+  fileSize: number;
+  status: HttpStatus;
+}
+
+interface EnqueueSavedFilePersistenceParams {
+  convertedContent: string | Buffer;
+  targetFormat: string;
+  fileType: FILE_TYPE;
+  sourceFormat: string;
+  userId: UUID;
+  fileSize: number;
+  startTime: number;
+}
+
+interface ConvertMultipartRequestParams {
+  req: FastifyRequest;
+  fileType: FILE_TYPE;
+  userId: UUID;
+}
+
+interface GetHistoryParams {
+  userId: UUID;
+  targetUserId: UUID;
+  query: GetHistoryQueryDto;
+}
+
 @Injectable()
 export class ConversionService implements OnModuleDestroy {
   private logger = new Logger(ConversionService.name);
@@ -62,13 +92,13 @@ export class ConversionService implements OnModuleDestroy {
     private readonly historyRepository: HistoryRepository,
   ) {}
 
-  private logConversionProcess(
-    actorUserId: UUID,
-    targetFormat: string,
-    sourceFormat: string,
-    fileSize: number,
-    status: HttpStatus,
-  ) {
+  private logConversionProcess({
+    actorUserId,
+    targetFormat,
+    sourceFormat,
+    fileSize,
+    status,
+  }: LogConversionProcessParams) {
     this.logger.log(
       JSON.stringify({
         event: 'CONVERT_FILE',
@@ -81,15 +111,15 @@ export class ConversionService implements OnModuleDestroy {
     );
   }
 
-  private enqueueSavedFilePersistence(
-    convertedContent: string | Buffer,
-    targetFormat: string,
-    fileType: FILE_TYPE,
-    sourceFormat: string,
-    userId: UUID,
-    fileSize: number,
-    startTime: number,
-  ): void {
+  private enqueueSavedFilePersistence({
+    convertedContent,
+    targetFormat,
+    fileType,
+    sourceFormat,
+    userId,
+    fileSize,
+    startTime,
+  }: EnqueueSavedFilePersistenceParams) {
     void (async () => {
       try {
         const savedFile = await this.fileStorage.save(
@@ -141,11 +171,14 @@ export class ConversionService implements OnModuleDestroy {
     await this.conversionEngine.close();
   }
 
-  async convertMultipartRequest(
-    req: FastifyRequest,
-    fileType: FILE_TYPE,
-    userId: UUID,
-  ): Promise<{ content: string | Buffer; targetFormat: string }> {
+  async convertMultipartRequest({
+    req,
+    fileType,
+    userId,
+  }: ConvertMultipartRequestParams): Promise<{
+    content: string | Buffer;
+    targetFormat: string;
+  }> {
     const startTime = performance.now();
     let sourceFormat: string | null = null;
     let targetFormat: string | null = null;
@@ -205,43 +238,43 @@ export class ConversionService implements OnModuleDestroy {
 
       if (streamError) throw streamError;
       if (!rawFilePart || !fileBuffer) {
-        this.logConversionProcess(
-          userId,
-          targetFormat ?? '',
-          sourceFormat ?? '',
+        this.logConversionProcess({
+          actorUserId: userId,
+          targetFormat: targetFormat ?? '',
+          sourceFormat: sourceFormat ?? '',
           fileSize,
-          HttpStatus.BAD_REQUEST,
-        );
+          status: HttpStatus.BAD_REQUEST,
+        });
         throw new BadRequestException('File is required');
       }
       if (!targetFormat) {
-        this.logConversionProcess(
-          userId,
-          targetFormat ?? '',
-          sourceFormat ?? '',
+        this.logConversionProcess({
+          actorUserId: userId,
+          targetFormat: targetFormat ?? '',
+          sourceFormat: sourceFormat ?? '',
           fileSize,
-          HttpStatus.BAD_REQUEST,
-        );
+          status: HttpStatus.BAD_REQUEST,
+        });
         throw new BadRequestException('targetFormat field is required');
       }
       if (fileSize === 0) {
-        this.logConversionProcess(
-          userId,
+        this.logConversionProcess({
+          actorUserId: userId,
           targetFormat,
-          sourceFormat ?? '',
+          sourceFormat: sourceFormat ?? '',
           fileSize,
-          HttpStatus.BAD_REQUEST,
-        );
+          status: HttpStatus.BAD_REQUEST,
+        });
         throw new BadRequestException('File is empty');
       }
       if (!sourceFormat) {
-        this.logConversionProcess(
-          userId,
+        this.logConversionProcess({
+          actorUserId: userId,
           targetFormat,
-          sourceFormat ?? '',
+          sourceFormat: sourceFormat ?? '',
           fileSize,
-          HttpStatus.BAD_REQUEST,
-        );
+          status: HttpStatus.BAD_REQUEST,
+        });
         throw new UnsupportedMediaTypeException('Unsupported source format');
       }
 
@@ -255,26 +288,26 @@ export class ConversionService implements OnModuleDestroy {
             );
 
       if (!isValidTarget) {
-        this.logConversionProcess(
-          userId,
+        this.logConversionProcess({
+          actorUserId: userId,
           targetFormat,
           sourceFormat,
           fileSize,
-          HttpStatus.BAD_REQUEST,
-        );
+          status: HttpStatus.BAD_REQUEST,
+        });
         throw new UnsupportedMediaTypeException('Invalid target format');
       }
 
       // 3. Size Limit Enforcement
       const fileSizeLimit = FILE_SIZE_LIMITS[sourceFormat];
       if (fileSizeLimit && fileSize > fileSizeLimit) {
-        this.logConversionProcess(
-          userId,
+        this.logConversionProcess({
+          actorUserId: userId,
           targetFormat,
           sourceFormat,
           fileSize,
-          HttpStatus.PAYLOAD_TOO_LARGE,
-        );
+          status: HttpStatus.PAYLOAD_TOO_LARGE,
+        });
         throw new PayloadTooLargeException(
           'File size exceeds target format limit',
         );
@@ -282,24 +315,24 @@ export class ConversionService implements OnModuleDestroy {
 
       // 4. Identity Conversion Guard
       if (sourceFormat === targetFormat) {
-        this.logConversionProcess(
-          userId,
+        this.logConversionProcess({
+          actorUserId: userId,
           targetFormat,
           sourceFormat,
           fileSize,
-          HttpStatus.OK,
-        );
+          status: HttpStatus.OK,
+        });
 
         if (shouldSave) {
-          this.enqueueSavedFilePersistence(
-            fileBuffer,
+          this.enqueueSavedFilePersistence({
+            convertedContent: fileBuffer,
             targetFormat,
             fileType,
             sourceFormat,
             userId,
             fileSize,
             startTime,
-          );
+          });
           return { content: fileBuffer, targetFormat };
         }
 
@@ -320,22 +353,22 @@ export class ConversionService implements OnModuleDestroy {
       // 5. Off-load Task to Worker Pool
       const convertedContent =
         fileType === FILE_TYPE.TEXT
-          ? await this.conversionEngine.convertText(
-              fileBuffer,
-              sourceFormat,
+          ? await this.conversionEngine.convertText({
+              buffer: fileBuffer,
+              originalFormat: sourceFormat,
               targetFormat,
-              controller.signal,
-            )
-          : await this.conversionEngine.convertImage(
-              fileBuffer,
-              sourceFormat,
+              signal: controller.signal,
+            })
+          : await this.conversionEngine.convertImage({
+              buffer: fileBuffer,
+              originalFormat: sourceFormat,
               targetFormat,
               options,
-              controller.signal,
-            );
+              signal: controller.signal,
+            });
 
       if (shouldSave) {
-        this.enqueueSavedFilePersistence(
+        this.enqueueSavedFilePersistence({
           convertedContent,
           targetFormat,
           fileType,
@@ -343,14 +376,14 @@ export class ConversionService implements OnModuleDestroy {
           userId,
           fileSize,
           startTime,
-        );
-        this.logConversionProcess(
-          userId,
+        });
+        this.logConversionProcess({
+          actorUserId: userId,
           targetFormat,
           sourceFormat,
           fileSize,
-          HttpStatus.OK,
-        );
+          status: HttpStatus.OK,
+        });
         return { content: convertedContent, targetFormat };
       }
 
@@ -366,13 +399,13 @@ export class ConversionService implements OnModuleDestroy {
         fileId: null,
       });
 
-      this.logConversionProcess(
-        userId,
+      this.logConversionProcess({
+        actorUserId: userId,
         targetFormat,
         sourceFormat,
         fileSize,
-        HttpStatus.OK,
-      );
+        status: HttpStatus.OK,
+      });
 
       return { content: convertedContent, targetFormat };
     } catch (error: any) {
@@ -416,26 +449,23 @@ export class ConversionService implements OnModuleDestroy {
         fileId: null,
       });
 
-      this.logConversionProcess(
-        userId,
-        targetFormat ?? '',
-        sourceFormat ?? '',
+      this.logConversionProcess({
+        actorUserId: userId,
+        targetFormat: targetFormat ?? '',
+        sourceFormat: sourceFormat ?? '',
         fileSize,
-        normalizedError instanceof HttpException
-          ? normalizedError.getStatus()
-          : 500,
-      );
+        status:
+          normalizedError instanceof HttpException
+            ? normalizedError.getStatus()
+            : 500,
+      });
       throw normalizedError;
     } finally {
       clearTimeout(timeoutId);
     }
   }
 
-  async getHistory(
-    userId: UUID,
-    targetUserId: UUID,
-    query: GetHistoryQueryDto,
-  ) {
+  async getHistory({ userId, targetUserId, query }: GetHistoryParams) {
     const {
       cursor,
       limit = 20,

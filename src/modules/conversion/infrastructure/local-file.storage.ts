@@ -36,7 +36,7 @@ export class LocalFileStorage implements FileStorage {
     return createReadStream(filePath);
   }
 
-  remove(filePath: string): Promise<void> {
+  remove(filePath: string) {
     return fs.unlink(filePath);
   }
 }

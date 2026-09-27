@@ -275,7 +275,11 @@ describe('GrantsService', () => {
       grantRepository.findOne.mockResolvedValue(existingGrant);
 
       await expect(
-        service.update('grant-1', { actions: ['invalid-action'] }, mockUserId),
+        service.update({
+          id: 'grant-1',
+          updateGrantDto: { actions: ['invalid-action'] },
+          actorUserId: mockUserId,
+        }),
       ).rejects.toThrow(
         new BadRequestException(
           "Actions [invalid-action] are not valid for permission 'users'",
@@ -300,13 +304,13 @@ describe('GrantsService', () => {
       grantRepository.findOne.mockResolvedValue(existingGrant);
       grantRepository.save.mockResolvedValue(updatedGrant);
 
-      const result = await service.update(
-        'grant-1',
-        {
+      const result = await service.update({
+        id: 'grant-1',
+        updateGrantDto: {
           actions: ['read', 'write'],
         },
-        mockUserId,
-      );
+        actorUserId: mockUserId,
+      });
 
       expect(result).toBe(updatedGrant);
       expect(eventEmitter.changed).toHaveBeenCalled();
@@ -325,7 +329,11 @@ describe('GrantsService', () => {
       grantRepository.findOne.mockResolvedValue(existingGrant);
       grantRepository.save.mockImplementation(async (g) => g as Grant);
 
-      await service.update('grant-1', { actions: [] }, mockUserId);
+      await service.update({
+        id: 'grant-1',
+        updateGrantDto: { actions: [] },
+        actorUserId: mockUserId,
+      });
 
       expect(existingGrant.actions).toBeNull();
       expect(eventEmitter.changed).toHaveBeenCalled();

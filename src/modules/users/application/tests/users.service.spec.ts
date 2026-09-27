@@ -184,7 +184,11 @@ describe('UsersService', () => {
       };
 
       await expect(
-        service.initiateEmailChange(userId, dto, otherUserPayload),
+        service.initiateEmailChange({
+          userId,
+          dto,
+          requestingUser: otherUserPayload,
+        }),
       ).rejects.toThrow(ForbiddenException);
     });
 
@@ -192,7 +196,11 @@ describe('UsersService', () => {
       usersRepository.findOne.mockResolvedValue(mockUser);
 
       await expect(
-        service.initiateEmailChange(userId, dto, mockRegularUserPayload),
+        service.initiateEmailChange({
+          userId,
+          dto,
+          requestingUser: mockRegularUserPayload,
+        }),
       ).rejects.toThrow(ConflictException);
     });
 
@@ -203,16 +211,18 @@ describe('UsersService', () => {
         rawOtp: '123456',
       });
 
-      const result = await service.initiateEmailChange(
+      const result = await service.initiateEmailChange({
         userId,
         dto,
-        mockRegularUserPayload,
-      );
+        requestingUser: mockRegularUserPayload,
+      });
 
       expect(verificationService.createVerificationRecord).toHaveBeenCalledWith(
-        userId,
-        VerificationTokenType.EMAIL_CHANGE,
-        'newemail@example.com',
+        {
+          userId,
+          type: VerificationTokenType.EMAIL_CHANGE,
+          targetEmail: 'newemail@example.com',
+        },
       );
       expect(mailService.sendVerificationOtp).toHaveBeenCalledWith(
         'newemail@example.com',
@@ -240,7 +250,11 @@ describe('UsersService', () => {
       };
 
       await expect(
-        service.confirmEmailChange(userId, dto, otherPayload),
+        service.confirmEmailChange({
+          userId,
+          dto,
+          requestingUser: otherPayload,
+        }),
       ).rejects.toThrow(ForbiddenException);
     });
 
@@ -259,7 +273,11 @@ describe('UsersService', () => {
       });
 
       await expect(
-        service.confirmEmailChange(userId, dto, mockRegularUserPayload),
+        service.confirmEmailChange({
+          userId,
+          dto,
+          requestingUser: mockRegularUserPayload,
+        }),
       ).rejects.toThrow(ForbiddenException);
     });
 
@@ -278,7 +296,11 @@ describe('UsersService', () => {
       });
 
       await expect(
-        service.confirmEmailChange(userId, dto, mockRegularUserPayload),
+        service.confirmEmailChange({
+          userId,
+          dto,
+          requestingUser: mockRegularUserPayload,
+        }),
       ).rejects.toThrow(ConflictException);
     });
 
@@ -303,7 +325,11 @@ describe('UsersService', () => {
       });
 
       await expect(
-        service.confirmEmailChange(userId, dto, mockRegularUserPayload),
+        service.confirmEmailChange({
+          userId,
+          dto,
+          requestingUser: mockRegularUserPayload,
+        }),
       ).rejects.toThrow(ConflictException);
     });
 
@@ -324,7 +350,11 @@ describe('UsersService', () => {
       usersRepository.findOne.mockResolvedValue(null);
 
       await expect(
-        service.confirmEmailChange(userId, dto, mockRegularUserPayload),
+        service.confirmEmailChange({
+          userId,
+          dto,
+          requestingUser: mockRegularUserPayload,
+        }),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -346,11 +376,11 @@ describe('UsersService', () => {
         .mockResolvedValueOnce(null) // for existing check
         .mockResolvedValueOnce({ ...mockUser }); // for finding target user
 
-      const result = await service.confirmEmailChange(
+      const result = await service.confirmEmailChange({
         userId,
         dto,
-        mockRegularUserPayload,
-      );
+        requestingUser: mockRegularUserPayload,
+      });
 
       expect(usersRepository.save).toHaveBeenCalledWith(
         expect.objectContaining({ email: 'newemail@example.com' }),
@@ -428,7 +458,10 @@ describe('UsersService', () => {
       usersRepository.findOne.mockResolvedValue(null);
 
       await expect(
-        service.updateUser(userId, { photo: 'http://pic.jpg' }),
+        service.updateUser({
+          userId,
+          updateData: { photo: 'http://pic.jpg' },
+        }),
       ).rejects.toThrow('User not found');
     });
 
@@ -442,11 +475,11 @@ describe('UsersService', () => {
       };
 
       await expect(
-        service.updateUser(
+        service.updateUser({
           userId,
-          { photo: 'http://pic.jpg' },
-          otherUserPayload,
-        ),
+          updateData: { photo: 'http://pic.jpg' },
+          requestingUser: otherUserPayload,
+        }),
       ).rejects.toThrow(ForbiddenException);
     });
 
@@ -454,11 +487,11 @@ describe('UsersService', () => {
       usersRepository.findOne.mockResolvedValue(mockUser);
 
       await expect(
-        service.updateUser(
+        service.updateUser({
           userId,
-          { email: 'directchange@example.com' },
-          mockRegularUserPayload,
-        ),
+          updateData: { email: 'directchange@example.com' },
+          requestingUser: mockRegularUserPayload,
+        }),
       ).rejects.toThrow(ForbiddenException);
     });
 
@@ -471,11 +504,11 @@ describe('UsersService', () => {
         }); // existing user with email
 
       await expect(
-        service.updateUser(
+        service.updateUser({
           userId,
-          { email: 'existing@example.com' },
-          mockAdminUserPayload,
-        ),
+          updateData: { email: 'existing@example.com' },
+          requestingUser: mockAdminUserPayload,
+        }),
       ).rejects.toThrow(ConflictException);
     });
 
@@ -484,11 +517,11 @@ describe('UsersService', () => {
 
       const updateDto: UpdateUserDto = { photo: 'http://newphoto.png' };
 
-      const result = await service.updateUser(
+      const result = await service.updateUser({
         userId,
-        updateDto,
-        mockRegularUserPayload,
-      );
+        updateData: updateDto,
+        requestingUser: mockRegularUserPayload,
+      });
 
       expect(usersRepository.save).toHaveBeenCalledWith(
         expect.objectContaining({ photo: 'http://newphoto.png' }),
@@ -533,7 +566,11 @@ describe('UsersService', () => {
       usersRepository.findOne.mockResolvedValue(null);
 
       await expect(
-        service.deleteUser(userId, {}, mockRegularUserPayload),
+        service.deleteUser({
+          userId,
+          dto: {},
+          requestingUser: mockRegularUserPayload,
+        }),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -550,7 +587,11 @@ describe('UsersService', () => {
       } as UserDeletionJob);
 
       await expect(
-        service.deleteUser(userId, {}, mockRegularUserPayload),
+        service.deleteUser({
+          userId,
+          dto: {},
+          requestingUser: mockRegularUserPayload,
+        }),
       ).rejects.toThrow(ConflictException);
     });
 
@@ -562,16 +603,18 @@ describe('UsersService', () => {
         rawOtp: '654321',
       });
 
-      const result = await service.deleteUser(
+      const result = await service.deleteUser({
         userId,
-        {},
-        mockRegularUserPayload,
-      );
+        dto: {},
+        requestingUser: mockRegularUserPayload,
+      });
 
       expect(verificationService.createVerificationRecord).toHaveBeenCalledWith(
-        userId,
-        VerificationTokenType.USER_DELETION,
-        mockUser.email,
+        {
+          userId,
+          type: VerificationTokenType.USER_DELETION,
+          targetEmail: mockUser.email,
+        },
       );
       expect(mailService.sendVerificationOtp).toHaveBeenCalledWith(
         mockUser.email,
@@ -605,17 +648,17 @@ describe('UsersService', () => {
         reason: 'No longer needed',
       };
 
-      const result = await service.deleteUser(
+      const result = await service.deleteUser({
         userId,
-        deleteDto,
-        mockRegularUserPayload,
-      );
+        dto: deleteDto,
+        requestingUser: mockRegularUserPayload,
+      });
 
-      expect(verificationService.verifyOtp).toHaveBeenCalledWith(
-        'deletion-challenge-1',
-        '654321',
-        VerificationTokenType.USER_DELETION,
-      );
+      expect(verificationService.verifyOtp).toHaveBeenCalledWith({
+        attemptId: 'deletion-challenge-1',
+        inputOtp: '654321',
+        expectedType: VerificationTokenType.USER_DELETION,
+      });
       expect('status' in result && result.status).toBe(DeletionJobStatus.DONE);
     });
 
@@ -640,7 +683,11 @@ describe('UsersService', () => {
       };
 
       await expect(
-        service.deleteUser(userId, deleteDto, mockRegularUserPayload),
+        service.deleteUser({
+          userId,
+          dto: deleteDto,
+          requestingUser: mockRegularUserPayload,
+        }),
       ).rejects.toThrow(ForbiddenException);
     });
 
@@ -648,12 +695,12 @@ describe('UsersService', () => {
       usersRepository.findOne.mockResolvedValue(mockUser);
       userDeletionJobRepository.findOne.mockResolvedValue(null);
 
-      const result = await service.deleteUser(
+      const result = await service.deleteUser({
         userId,
-        {},
-        mockAdminUserPayload,
-        true,
-      );
+        dto: {},
+        requestingUser: mockAdminUserPayload,
+        isAsync: true,
+      });
 
       expect(eventEmitter.emit).toHaveBeenCalledWith(
         'user.delete.request',
@@ -677,7 +724,11 @@ describe('UsersService', () => {
         updatedAt: new Date(),
       };
 
-      await service.processUserDeletion(job, mockUser, 'self');
+      await service.processUserDeletion({
+        job,
+        user: mockUser,
+        operationType: 'self',
+      });
 
       expect(usersRepository.remove).toHaveBeenCalledWith(mockUser);
       expect(userDeletionJobRepository.save).toHaveBeenCalledWith(
@@ -699,7 +750,11 @@ describe('UsersService', () => {
       usersRepository.remove.mockRejectedValue(new Error('DB Error'));
 
       await expect(
-        service.processUserDeletion(job, mockUser, 'self'),
+        service.processUserDeletion({
+          job,
+          user: mockUser,
+          operationType: 'self',
+        }),
       ).rejects.toThrow('DB Error');
       expect(userDeletionJobRepository.save).toHaveBeenCalledWith(
         expect.objectContaining({

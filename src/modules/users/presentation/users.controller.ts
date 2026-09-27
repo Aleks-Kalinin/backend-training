@@ -184,11 +184,11 @@ export class UsersContoller {
     @Body() updateUserDto: UpdateUserDto,
     @Req() req: AuthenticatedRequest,
   ) {
-    const updatedUser = await this.usersService.updateUser(
-      id,
-      updateUserDto,
-      req.user,
-    );
+    const updatedUser = await this.usersService.updateUser({
+      userId: id,
+      updateData: updateUserDto,
+      requestingUser: req.user,
+    });
 
     return UserMapper.toProfileResponseDto(updatedUser, req.user);
   }
@@ -232,7 +232,11 @@ export class UsersContoller {
     @Body() emailChangeDto: InitiateEmailChangeDto,
     @Req() req: AuthenticatedRequest,
   ) {
-    return this.usersService.initiateEmailChange(id, emailChangeDto, req.user);
+    return this.usersService.initiateEmailChange({
+      userId: id,
+      dto: emailChangeDto,
+      requestingUser: req.user,
+    });
   }
 
   @Post('users/:id/email-change/confirm')
@@ -279,7 +283,11 @@ export class UsersContoller {
     @Body() confirmDto: ConfirmEmailChangeDto,
     @Req() req: AuthenticatedRequest,
   ) {
-    return this.usersService.confirmEmailChange(id, confirmDto, req.user);
+    return this.usersService.confirmEmailChange({
+      userId: id,
+      dto: confirmDto,
+      requestingUser: req.user,
+    });
   }
 
   @Delete('users/:id')
@@ -334,7 +342,11 @@ export class UsersContoller {
     @Body() deleteUserDto: DeleteUserDto,
     @Req() req: AuthenticatedRequest,
   ) {
-    return await this.usersService.deleteUser(id, deleteUserDto, req.user);
+    return await this.usersService.deleteUser({
+      userId: id,
+      dto: deleteUserDto,
+      requestingUser: req.user,
+    });
   }
 
   @Get('users/:id/deletion-status')

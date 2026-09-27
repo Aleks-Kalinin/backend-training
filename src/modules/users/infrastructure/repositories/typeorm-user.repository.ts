@@ -81,7 +81,7 @@ export class TypeOrmUserRepository implements UserRepository {
     return this.repository.save(user as User) as Promise<DomainUser>;
   }
 
-  async remove(user: DomainUser): Promise<void> {
+  async remove(user: DomainUser) {
     await this.repository.remove(user as User);
   }
 }

@@ -91,11 +91,11 @@ export class RolesController {
     @Body() updateRoleDto: UpdateRoleDto,
     @Req() req: AuthenticatedRequest,
   ): Promise<RoleResponseDto> {
-    const role = await this.rolesService.update(
+    const role = await this.rolesService.update({
       id,
       updateRoleDto,
-      req.user.sub,
-    );
+      actorUserId: req.user.sub,
+    });
     return RoleResponseDto.fromEntity(role);
   }
 
@@ -116,10 +116,7 @@ export class RolesController {
   @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'Forbidden' })
   @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'Role not found' })
   @RequirePermission('roles', 'delete')
-  async remove(
-    @Param('id') id: string,
-    @Req() req: AuthenticatedRequest,
-  ): Promise<void> {
+  async remove(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
     await this.rolesService.remove(id, req.user.sub);
   }
 }

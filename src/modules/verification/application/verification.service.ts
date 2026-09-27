@@ -41,20 +41,24 @@ export class VerificationService {
     return crypto.randomInt(100000, 999999).toString();
   }
 
-  async createVerificationRecord(
-    userId: string,
-    type: VerificationTokenType,
-    targetEmail?: string,
-  ) {
+  async createVerificationRecord({
+    userId,
+    type,
+    targetEmail,
+  }: {
+    userId: string;
+    type: VerificationTokenType;
+    targetEmail?: string;
+  }) {
     const otp = this.generateOtp();
     const tokenHash = await this.passwordHasher.hash(otp);
     const expiresAt = new Date(Date.now() + this.OTP_TTL_MINUTES * 60 * 1000);
 
-    await this.verificationRepository.consumeActiveForUser(
+    await this.verificationRepository.consumeActiveForUser({
       userId,
       type,
-      new Date(),
-    );
+      consumedAt: new Date(),
+    });
 
     const record = await this.verificationRepository.create({
       userId,
@@ -72,11 +76,15 @@ export class VerificationService {
     return { attemptId: record.verificationTokenId, rawOtp: otp };
   }
 
-  async verifyOtp(
-    attemptId: string,
-    inputOtp: string,
-    expectedType: VerificationTokenType = VerificationTokenType.REGISTRATION,
-  ): Promise<VerificationToken> {
+  async verifyOtp({
+    attemptId,
+    inputOtp,
+    expectedType = VerificationTokenType.REGISTRATION,
+  }: {
+    attemptId: string;
+    inputOtp: string;
+    expectedType?: VerificationTokenType;
+  }): Promise<VerificationToken> {
     const record = await this.verificationRepository.findActive(
       attemptId,
       expectedType,

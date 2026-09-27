@@ -8,33 +8,46 @@ import {
 
 import { ConfigModule } from '@/core/config/config.module';
 import { ConfigService } from '@/core/config/config.service';
+import { assertTestDatabaseTarget } from './test-database-guard';
 
 @Module({
   imports: [
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        type: 'postgres',
+      useFactory: (config: ConfigService) => {
+        const host = config.get('POSTGRES_HOST');
+        const database = config.get('POSTGRES_DB');
 
-        host: config.get('POSTGRES_HOST'),
-        port: Number(config.get('POSTGRES_PORT')),
-        username: config.get('POSTGRES_USER'),
-        password: config.get('POSTGRES_PASSWORD'),
-        database: config.get('POSTGRES_DB'),
+        assertTestDatabaseTarget({
+          nodeEnv: config.get('NODE_ENV'),
+          host,
+          database,
+        });
 
-        entities: [__dirname + '/../../**/*.entity{.ts,.js}'],
-        autoLoadEntities: true,
+        return {
+          type: 'postgres',
 
-        migrationsTableName: 'migrations',
-        migrations: [
-          __dirname + '/../../database/migrations/*.migration{.ts,.js}',
-        ],
-        migrationsRun: String(config.get('POSTGRES_MIGRATIONS_RUN')) === 'true',
+          host,
+          port: Number(config.get('POSTGRES_PORT')),
+          username: config.get('POSTGRES_USER'),
+          password: config.get('POSTGRES_PASSWORD'),
+          database,
 
-        synchronize: String(config.get('POSTGRES_SYNCHRONIZE')) === 'true',
-        logging: String(config.get('POSTGRES_LOGGING')) === 'true',
-      }),
+          entities: [__dirname + '/../../**/*.entity{.ts,.js}'],
+          autoLoadEntities: true,
+
+          migrationsTableName: 'migrations',
+          migrations: [
+            __dirname + '/../../database/migrations/*.migration{.ts,.js}',
+          ],
+          migrationsRun:
+            String(config.get('POSTGRES_MIGRATIONS_RUN')) === 'true',
+
+          synchronize: String(config.get('POSTGRES_SYNCHRONIZE')) === 'true',
+          logging: String(config.get('POSTGRES_LOGGING')) === 'true',
+        };
+      },
       dataSourceFactory(options) {
         if (!options) {
           throw new Error('Invalid options passed');

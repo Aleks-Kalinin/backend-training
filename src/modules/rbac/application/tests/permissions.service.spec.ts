@@ -144,7 +144,11 @@ describe('PermissionsService', () => {
         .mockResolvedValueOnce({ id: 'p2', name: 'articles' } as Permission); // for name check
 
       await expect(
-        service.update('p1', { name: 'articles' }, mockUserId),
+        service.update({
+          id: 'p1',
+          updatePermissionDto: { name: 'articles' },
+          actorUserId: mockUserId,
+        }),
       ).rejects.toThrow(
         new ConflictException('Permission with name articles already exists'),
       );
@@ -163,11 +167,11 @@ describe('PermissionsService', () => {
       permissionRepository.findOne.mockResolvedValue(existingPermission);
       permissionRepository.save.mockResolvedValue(updatedPermission);
 
-      const result = await service.update(
-        'p1',
-        { actions: ['update'] },
-        mockUserId,
-      );
+      const result = await service.update({
+        id: 'p1',
+        updatePermissionDto: { actions: ['update'] },
+        actorUserId: mockUserId,
+      });
 
       expect(result).toBe(updatedPermission);
       expect(eventEmitter.changed).toHaveBeenCalled();

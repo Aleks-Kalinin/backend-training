@@ -40,11 +40,15 @@ import { GetHistoryQueryDto } from '../dto/get-history-query.dto';
 export class ConversionController {
   constructor(private readonly conversionService: ConversionService) {}
 
-  private setDownloadHeaders(
-    reply: FastifyReply,
-    targetFormat: string,
-    itemId: UUID,
-  ) {
+  private setDownloadHeaders({
+    reply,
+    targetFormat,
+    itemId,
+  }: {
+    reply: FastifyReply;
+    targetFormat: string;
+    itemId: UUID;
+  }) {
     const ALL_MIME_TYPES = { ...TEXT_MIME_TYPES, ...IMAGE_MIME_TYPES };
 
     reply.header(
@@ -57,7 +61,7 @@ export class ConversionController {
     );
   }
 
-  @Post('api/convert')
+  @Post('convert')
   @ApiOperation({
     summary: 'Convert text file',
     description:
@@ -138,11 +142,11 @@ export class ConversionController {
     }
 
     const { content, targetFormat } =
-      await this.conversionService.convertMultipartRequest(
+      await this.conversionService.convertMultipartRequest({
         req,
-        FILE_TYPE.TEXT,
+        fileType: FILE_TYPE.TEXT,
         userId,
-      );
+      });
 
     reply
       .header(
@@ -157,7 +161,7 @@ export class ConversionController {
     return content;
   }
 
-  @Get('api/convert/formats')
+  @Get('convert/formats')
   @ApiOperation({
     summary: 'Get available text conversion formats',
     description: 'Returns supported source to target text format mappings.',
@@ -204,7 +208,7 @@ export class ConversionController {
     ];
   }
 
-  @Post('api/images/convert')
+  @Post('images/convert')
   @ApiOperation({
     summary: 'Convert image file',
     description:
@@ -307,11 +311,11 @@ export class ConversionController {
     }
 
     const { content, targetFormat } =
-      await this.conversionService.convertMultipartRequest(
+      await this.conversionService.convertMultipartRequest({
         req,
-        FILE_TYPE.IMAGE,
+        fileType: FILE_TYPE.IMAGE,
         userId,
-      );
+      });
 
     reply
       .header(
@@ -326,7 +330,7 @@ export class ConversionController {
     return content;
   }
 
-  @Get('api/images/convert/formats')
+  @Get('images/convert/formats')
   @ApiOperation({
     summary: 'Get available image conversion formats',
     description: 'Returns supported source to target image format mappings.',
@@ -371,7 +375,7 @@ export class ConversionController {
     ];
   }
 
-  @Get('api/transformations/history')
+  @Get('transformations/history')
   @ApiOperation({
     summary: 'Get transformation history',
     description:
@@ -426,7 +430,11 @@ export class ConversionController {
       throw new Error('User ID is required');
     }
 
-    return this.conversionService.getHistory(userId, userId, query);
+    return this.conversionService.getHistory({
+      userId,
+      targetUserId: userId,
+      query,
+    });
   }
 
   @Get('admin/users/:userId/transformations/history')
@@ -494,10 +502,14 @@ export class ConversionController {
     @Query() query: GetHistoryQueryDto,
     @Req() req: AuthenticatedRequest,
   ) {
-    return this.conversionService.getHistory(userId, req.user?.sub, query);
+    return this.conversionService.getHistory({
+      userId,
+      targetUserId: req.user?.sub,
+      query,
+    });
   }
 
-  @Get('api/transformations/history/:itemId/download')
+  @Get('transformations/history/:itemId/download')
   @ApiOperation({
     summary: 'Download self-transformed file',
     description:
@@ -559,7 +571,7 @@ export class ConversionController {
     const { stream, targetFormat } =
       await this.conversionService.getFileForDownload(userId, itemId);
 
-    this.setDownloadHeaders(reply, targetFormat, itemId);
+    this.setDownloadHeaders({ reply, targetFormat, itemId });
     return stream;
   }
 
@@ -625,7 +637,7 @@ export class ConversionController {
   ) {
     const { stream, targetFormat } =
       await this.conversionService.getFileForDownload(userId, itemId);
-    this.setDownloadHeaders(reply, targetFormat, itemId);
+    this.setDownloadHeaders({ reply, targetFormat, itemId });
     return stream;
   }
 }

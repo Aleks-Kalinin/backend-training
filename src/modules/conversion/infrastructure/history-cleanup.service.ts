@@ -19,7 +19,7 @@ export class HistoryCleanupService {
   ) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
-  async cleanupExpiredHistory(): Promise<void> {
+  async cleanupExpiredHistory() {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - HISTORY_RETENTION_DAYS);
     const expiredItems = await this.historyRepository.find({

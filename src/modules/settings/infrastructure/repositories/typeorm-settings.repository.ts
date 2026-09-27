@@ -24,7 +24,7 @@ export class TypeOrmSettingsRepository implements SettingsRepository {
     return settings.map((setting) => this.toDomain(setting));
   }
 
-  async save(settings: DomainSystemSetting[]): Promise<void> {
+  async save(settings: DomainSystemSetting[]) {
     await this.repository.save(
       settings.map((setting) => this.repository.create(setting)),
     );

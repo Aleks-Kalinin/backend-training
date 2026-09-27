@@ -142,11 +142,15 @@ export class GrantsService {
     return savedGrant;
   }
 
-  async update(
-    id: string,
-    updateGrantDto: UpdateGrantDto,
-    actorUserId: UUID,
-  ): Promise<Grant> {
+  async update({
+    id,
+    updateGrantDto,
+    actorUserId,
+  }: {
+    id: string;
+    updateGrantDto: UpdateGrantDto;
+    actorUserId: UUID;
+  }): Promise<Grant> {
     const grant = await this.findOne(id, actorUserId);
     const { actions } = updateGrantDto;
 
@@ -182,7 +186,7 @@ export class GrantsService {
     return updatedGrant;
   }
 
-  async remove(id: string, actorUserId: UUID): Promise<void> {
+  async remove(id: string, actorUserId: UUID) {
     const grant = await this.findOne(id, actorUserId);
     await this.grantRepository.remove(grant);
     this.eventEmitter.changed();

@@ -99,11 +99,11 @@ export class PermissionsController {
     @Body() updatePermissionDto: UpdatePermissionDto,
     @Req() req: AuthenticatedRequest,
   ): Promise<PermissionResponseDto> {
-    const permission = await this.permissionsService.update(
+    const permission = await this.permissionsService.update({
       id,
       updatePermissionDto,
-      req.user.sub,
-    );
+      actorUserId: req.user.sub,
+    });
     return PermissionResponseDto.fromEntity(permission);
   }
 
@@ -127,10 +127,7 @@ export class PermissionsController {
     description: 'Permission not found',
   })
   @RequirePermission('permissions', 'delete')
-  async remove(
-    @Param('id') id: string,
-    @Req() req: AuthenticatedRequest,
-  ): Promise<void> {
+  async remove(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
     await this.permissionsService.remove(id, req.user.sub);
   }
 }
