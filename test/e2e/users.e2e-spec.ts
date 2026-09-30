@@ -1,9 +1,9 @@
 import request from 'supertest';
-import { createE2eTestContext } from './e2e/e2e-test-context';
-import { User } from '../src/modules/users/infrastructure/entity/user.entity';
-import { UserStatus } from '../src/modules/users/domain/user-status.enum';
-import { UserDeletionJob } from '../src/modules/users/infrastructure/entity/user-deletion-job.entity';
-import { API_BASE_PATH } from '../src/core/api-routing';
+import { API_BASE_PATH } from '../../src/core/api-routing';
+import { UserStatus } from '../../src/modules/users/domain/user-status.enum';
+import { UserDeletionJob } from '../../src/modules/users/infrastructure/entity/user-deletion-job.entity';
+import { User } from '../../src/modules/users/infrastructure/entity/user.entity';
+import { createE2eTestContext } from './e2e-test-context';
 
 describe('Users HTTP e2e', () => {
   const context = createE2eTestContext();

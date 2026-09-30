@@ -1,8 +1,8 @@
 import request from 'supertest';
-import { createE2eTestContext } from './e2e/e2e-test-context';
-import { Grant } from '../src/modules/rbac/infrastructure/entities/grant.entity';
-import { SystemRole } from '../src/modules/rbac/domain/system-role.enum';
-import { API_BASE_PATH } from '../src/core/api-routing';
+import { API_BASE_PATH } from '../../src/core/api-routing';
+import { SystemRole } from '../../src/modules/rbac/domain/system-role.enum';
+import { Grant } from '../../src/modules/rbac/infrastructure/entities/grant.entity';
+import { createE2eTestContext } from './e2e-test-context';
 
 describe('RBAC HTTP e2e', () => {
   const context = createE2eTestContext();

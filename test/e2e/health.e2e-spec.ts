@@ -1,6 +1,6 @@
 import request from 'supertest';
-import { API_BASE_PATH } from '../src/core/api-routing';
-import { createE2eTestContext } from './e2e/e2e-test-context';
+import { API_BASE_PATH } from '../../src/core/api-routing';
+import { createE2eTestContext } from './e2e-test-context';
 
 describe('Health HTTP e2e', () => {
   const context = createE2eTestContext();
