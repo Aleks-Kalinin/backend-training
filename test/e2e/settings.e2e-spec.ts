@@ -1,4 +1,4 @@
-import { createE2eTestContext } from './e2e/e2e-test-context';
+import { createE2eTestContext } from './e2e-test-context';
 
 describe('Settings HTTP e2e', () => {
   const context = createE2eTestContext();

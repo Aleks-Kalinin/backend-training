@@ -1,9 +1,9 @@
 import request from 'supertest';
-import { createE2eTestContext } from './e2e/e2e-test-context';
-import { FILE_CONVERSION_STATUS } from '../src/modules/conversion/application/constants/file-conversion-status';
-import { FILE_TYPE } from '../src/modules/conversion/application/constants/file-type';
-import { TransformationHistoryItemEntity } from '../src/modules/conversion/infrastructure/entity/transformation-history-item.entity';
-import { API_BASE_PATH } from '../src/core/api-routing';
+import { API_BASE_PATH } from '../../src/core/api-routing';
+import { FILE_CONVERSION_STATUS } from '../../src/modules/conversion/application/constants/file-conversion-status';
+import { FILE_TYPE } from '../../src/modules/conversion/application/constants/file-type';
+import { TransformationHistoryItemEntity } from '../../src/modules/conversion/infrastructure/entity/transformation-history-item.entity';
+import { createE2eTestContext } from './e2e-test-context';
 
 describe('Conversion HTTP e2e', () => {
   const context = createE2eTestContext();

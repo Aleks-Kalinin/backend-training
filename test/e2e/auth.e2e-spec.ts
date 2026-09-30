@@ -1,12 +1,12 @@
-import { ConfigService } from '../src/core/config/config.service';
-import { SETTING_KEYS } from '../src/modules/settings/domain/settings.constants';
-import { SystemSetting } from '../src/modules/settings/infrastructure/entity/system-setting.entity';
-import { User } from '../src/modules/users/infrastructure/entity/user.entity';
-import { UserStatus } from '../src/modules/users/domain/user-status.enum';
-import { SystemRole } from '../src/modules/rbac/domain/system-role.enum';
 import request from 'supertest';
-import { API_BASE_PATH } from '../src/core/api-routing';
-import { createE2eTestContext } from './e2e/e2e-test-context';
+import { API_BASE_PATH } from '../../src/core/api-routing';
+import { ConfigService } from '../../src/core/config/config.service';
+import { SystemRole } from '../../src/modules/rbac/domain/system-role.enum';
+import { SETTING_KEYS } from '../../src/modules/settings/domain/settings.constants';
+import { SystemSetting } from '../../src/modules/settings/infrastructure/entity/system-setting.entity';
+import { UserStatus } from '../../src/modules/users/domain/user-status.enum';
+import { User } from '../../src/modules/users/infrastructure/entity/user.entity';
+import { createE2eTestContext } from './e2e-test-context';
 
 describe('Authentication HTTP e2e', () => {
   const context = createE2eTestContext();
