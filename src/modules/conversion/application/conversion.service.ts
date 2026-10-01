@@ -111,7 +111,7 @@ export class ConversionService implements OnModuleDestroy {
     );
   }
 
-  private enqueueSavedFilePersistence({
+  private async enqueueSavedFilePersistence({
     convertedContent,
     targetFormat,
     fileType,
@@ -120,51 +120,49 @@ export class ConversionService implements OnModuleDestroy {
     fileSize,
     startTime,
   }: EnqueueSavedFilePersistenceParams) {
-    void (async () => {
-      try {
-        const savedFile = await this.fileStorage.save(
-          convertedContent,
-          targetFormat,
-        );
+    try {
+      const savedFile = await this.fileStorage.save(
+        convertedContent,
+        targetFormat,
+      );
 
-        this.logger.log(
-          JSON.stringify({
-            type: 'SAVE',
-            userId,
-            targetFormat,
-            fileId: savedFile.id,
-            HttpStatus: HttpStatus.OK,
-          }),
-        );
+      this.logger.log(
+        JSON.stringify({
+          type: 'SAVE',
+          userId,
+          targetFormat,
+          fileId: savedFile.id,
+          HttpStatus: HttpStatus.OK,
+        }),
+      );
 
-        await this.createHistoryEntry({
-          type: fileType,
-          sourceFormat,
-          targetFormat,
-          status: FILE_CONVERSION_STATUS.SUCCESS,
-          fileSize,
-          startTime,
-          userId,
-          fileId: savedFile.id as UUID,
-        });
-      } catch (error) {
-        this.logger.error(
-          'Failed to persist converted file asynchronously',
-          error,
-        );
-        await this.createHistoryEntry({
-          type: fileType,
-          sourceFormat,
-          targetFormat,
-          status: FILE_CONVERSION_STATUS.ERROR,
-          fileSize,
-          startTime,
-          userId,
-          fileId: null,
-          errorCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        });
-      }
-    })();
+      await this.createHistoryEntry({
+        type: fileType,
+        sourceFormat,
+        targetFormat,
+        status: FILE_CONVERSION_STATUS.SUCCESS,
+        fileSize,
+        startTime,
+        userId,
+        fileId: savedFile.id as UUID,
+      });
+    } catch (error) {
+      this.logger.error(
+        'Failed to persist converted file asynchronously',
+        error,
+      );
+      await this.createHistoryEntry({
+        type: fileType,
+        sourceFormat,
+        targetFormat,
+        status: FILE_CONVERSION_STATUS.ERROR,
+        fileSize,
+        startTime,
+        userId,
+        fileId: null,
+        errorCode: HttpStatus.INTERNAL_SERVER_ERROR,
+      });
+    }
   }
 
   async onModuleDestroy() {
@@ -324,7 +322,7 @@ export class ConversionService implements OnModuleDestroy {
         });
 
         if (shouldSave) {
-          this.enqueueSavedFilePersistence({
+          await this.enqueueSavedFilePersistence({
             convertedContent: fileBuffer,
             targetFormat,
             fileType,
@@ -368,7 +366,7 @@ export class ConversionService implements OnModuleDestroy {
             });
 
       if (shouldSave) {
-        this.enqueueSavedFilePersistence({
+        await this.enqueueSavedFilePersistence({
           convertedContent,
           targetFormat,
           fileType,

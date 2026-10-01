@@ -8,6 +8,7 @@ export function configureSwagger(app: INestApplication) {
       'REST API documentation for Backend Training project including Authentication, RBAC, Users Management, Settings, Health, and File Conversion services.',
     )
     .setVersion('1.0.0')
+    .addServer(`http://localhost:3007/api`, 'API Server')
     .addBearerAuth(
       {
         type: 'http',
@@ -33,7 +34,9 @@ export function configureSwagger(app: INestApplication) {
     })
     .build();
 
-  const document = SwaggerModule.createDocument(app, config);
+  const document = SwaggerModule.createDocument(app, config, {
+    ignoreGlobalPrefix: true,
+  });
 
   SwaggerModule.setup('docs', app, document, {
     jsonDocumentUrl: 'docs-json',
