@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { DeletionJobStatus } from '../../domain/deletion';
+import { AvatarCleanupService } from '../avatar-cleanup.service';
 import { USER_DELETION_JOB_REPOSITORY } from '../ports/deletion-job-repository.port';
 import type { UserDeletionJobRepository } from '../ports/deletion-job-repository.port';
 import { USER_REPOSITORY } from '../ports/user-repository.port';
@@ -20,6 +21,7 @@ export class UserDeletionListener {
     private readonly usersRepository: UserRepository,
     @Inject(USER_DELETION_JOB_REPOSITORY)
     private readonly userDeletionJobRepository: UserDeletionJobRepository,
+    private readonly avatarCleanupService: AvatarCleanupService,
   ) {}
 
   @OnEvent('user.delete.request', { async: true })
@@ -37,7 +39,13 @@ export class UserDeletionListener {
       job.status = DeletionJobStatus.IN_PROGRESS;
       await this.userDeletionJobRepository.save(job);
 
+      const avatarStoragePath = user.avatarStoragePath ?? null;
       await this.usersRepository.remove(user);
+      await this.avatarCleanupService.removeUserAvatar({
+        storagePath: avatarStoragePath,
+        actorUserId: job.requestedBy ?? userId,
+        targetUserId: userId,
+      });
       job.status = DeletionJobStatus.DONE;
       this.logger.log(`Successfully processed user deletion for ${userId}`);
     } catch (error) {

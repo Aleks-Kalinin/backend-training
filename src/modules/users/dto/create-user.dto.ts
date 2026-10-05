@@ -5,6 +5,8 @@ import {
   IsEnum,
   IsOptional,
   IsString,
+  IsUrl,
+  MaxLength,
   MinLength,
 } from 'class-validator';
 import { UserStatus } from '../domain/user-status.enum';
@@ -28,8 +30,14 @@ export class CreateUserDto {
   @IsBoolean()
   isVerified!: boolean;
 
-  @ApiPropertyOptional({ example: 'http://photo.png' })
+  @ApiPropertyOptional({
+    example: 'https://example.com/photo.png',
+    description: 'Absolute http(s) URL of the profile photo',
+    maxLength: 255,
+  })
   @IsOptional()
   @IsString()
+  @MaxLength(255)
+  @IsUrl({ protocols: ['http', 'https'], require_protocol: true })
   photo?: string;
 }

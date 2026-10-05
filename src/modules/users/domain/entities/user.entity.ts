@@ -19,6 +19,14 @@ export interface User {
   isVerified: boolean;
   createdAt: Date;
   updatedAt: Date;
+  /**
+   * URL-based photo set through the profile update endpoint.
+   */
   photo: string | null;
+  /**
+   * Bucket-relative key of an uploaded avatar. When set, it takes precedence
+   * over `photo` in profile responses.
+   */
+  avatarStoragePath?: string | null;
   roles: UserRole[];
 }

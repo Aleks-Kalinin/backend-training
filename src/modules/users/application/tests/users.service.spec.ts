@@ -42,6 +42,8 @@ import {
   UserRoleRepository,
 } from '../ports/role-repository.port';
 import { USER_REPOSITORY, UserRepository } from '../ports/user-repository.port';
+import { AvatarCleanupReason } from '../../domain/avatar-cleanup';
+import { AvatarCleanupService } from '../avatar-cleanup.service';
 import { UsersService } from '../users.service';
 
 describe('UsersService', () => {
@@ -65,6 +67,7 @@ describe('UsersService', () => {
   let verificationService: jest.Mocked<VerificationService>;
   let mailService: jest.Mocked<MailService>;
   let eventEmitter: jest.Mocked<EventEmitter2>;
+  let avatarCleanupService: jest.Mocked<AvatarCleanupService>;
 
   const mockUser: User = {
     userId: '11111111-1111-1111-1111-111111111111',
@@ -146,6 +149,11 @@ describe('UsersService', () => {
       emit: jest.fn(),
     } as unknown as jest.Mocked<EventEmitter2>;
 
+    avatarCleanupService = {
+      removeObject: jest.fn(() => Promise.resolve('removed')),
+      removeUserAvatar: jest.fn(() => Promise.resolve()),
+    } as unknown as jest.Mocked<AvatarCleanupService>;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         UsersService,
@@ -158,6 +166,7 @@ describe('UsersService', () => {
         { provide: VerificationService, useValue: verificationService },
         { provide: MailService, useValue: mailService },
         { provide: EventEmitter2, useValue: eventEmitter },
+        { provide: AvatarCleanupService, useValue: avatarCleanupService },
       ],
     }).compile();
 
@@ -441,6 +450,7 @@ describe('UsersService', () => {
         status: UserStatus.ACTIVE,
         isVerified: true,
         photo: null,
+        avatarStoragePath: null,
       });
       expect(usersRepository.save).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -527,6 +537,67 @@ describe('UsersService', () => {
         expect.objectContaining({ photo: 'http://newphoto.png' }),
       );
       expect(result).toBeDefined();
+      expect(avatarCleanupService.removeObject).not.toHaveBeenCalled();
+    });
+
+    it('clears an uploaded avatar and removes its object after saving a URL photo', async () => {
+      usersRepository.findOne.mockResolvedValue({
+        ...mockUser,
+        avatarStoragePath: `${userId}/old.webp`,
+      });
+
+      const result = await service.updateUser({
+        userId,
+        updateData: { photo: 'https://cdn.example.com/me.png' },
+        requestingUser: mockRegularUserPayload,
+      });
+
+      expect(result).toMatchObject({
+        photo: 'https://cdn.example.com/me.png',
+        avatarStoragePath: null,
+      });
+      expect(avatarCleanupService.removeObject).toHaveBeenCalledWith({
+        storagePath: `${userId}/old.webp`,
+        actorUserId: mockRegularUserPayload.sub,
+        targetUserId: userId,
+        reason: AvatarCleanupReason.PHOTO_URL_UPDATE,
+      });
+      expect(usersRepository.save.mock.invocationCallOrder[0]).toBeLessThan(
+        avatarCleanupService.removeObject.mock.invocationCallOrder[0],
+      );
+    });
+
+    it('keeps the uploaded avatar when the PATCH does not touch photo', async () => {
+      usersRepository.findOne.mockResolvedValue({
+        ...mockUser,
+        avatarStoragePath: `${userId}/current.webp`,
+      });
+
+      const result = await service.updateUser({
+        userId,
+        updateData: { status: UserStatus.ACTIVE },
+        requestingUser: mockAdminUserPayload,
+      });
+
+      expect(result.avatarStoragePath).toBe(`${userId}/current.webp`);
+      expect(avatarCleanupService.removeObject).not.toHaveBeenCalled();
+    });
+
+    it('does not remove the uploaded object when saving the URL photo fails', async () => {
+      usersRepository.findOne.mockResolvedValue({
+        ...mockUser,
+        avatarStoragePath: `${userId}/current.webp`,
+      });
+      usersRepository.save.mockRejectedValueOnce(new Error('DB down'));
+
+      await expect(
+        service.updateUser({
+          userId,
+          updateData: { photo: 'https://cdn.example.com/me.png' },
+          requestingUser: mockRegularUserPayload,
+        }),
+      ).rejects.toThrow('DB down');
+      expect(avatarCleanupService.removeObject).not.toHaveBeenCalled();
     });
   });
 
@@ -762,6 +833,56 @@ describe('UsersService', () => {
           errorMessage: 'DB Error',
         }),
       );
+      expect(avatarCleanupService.removeUserAvatar).not.toHaveBeenCalled();
+    });
+
+    it('removes the stored avatar object after deleting the user', async () => {
+      const job: UserDeletionJob = {
+        id: 'job-1',
+        userId: mockUser.userId,
+        status: DeletionJobStatus.IN_PROGRESS,
+        mode: DeletionExecutionMode.SYNC,
+        requestedBy: mockAdminUserPayload.sub,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      await service.processUserDeletion({
+        job,
+        user: { ...mockUser, avatarStoragePath: `${mockUser.userId}/a.webp` },
+        operationType: 'admin',
+      });
+
+      expect(avatarCleanupService.removeUserAvatar).toHaveBeenCalledWith({
+        storagePath: `${mockUser.userId}/a.webp`,
+        actorUserId: mockAdminUserPayload.sub,
+        targetUserId: mockUser.userId,
+      });
+      expect(job.status).toBe(DeletionJobStatus.DONE);
+    });
+
+    it('marks the job FAILED when avatar cleanup can be neither completed nor recorded', async () => {
+      const job: UserDeletionJob = {
+        id: 'job-1',
+        userId: mockUser.userId,
+        status: DeletionJobStatus.IN_PROGRESS,
+        mode: DeletionExecutionMode.SYNC,
+        requestedBy: mockUser.userId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      avatarCleanupService.removeUserAvatar.mockRejectedValueOnce(
+        new Error('Avatar cleanup could not be completed or recorded'),
+      );
+
+      await expect(
+        service.processUserDeletion({
+          job,
+          user: { ...mockUser, avatarStoragePath: `${mockUser.userId}/a.webp` },
+          operationType: 'self',
+        }),
+      ).rejects.toThrow('Avatar cleanup could not be completed or recorded');
+      expect(job.status).toBe(DeletionJobStatus.FAILED);
     });
   });
 

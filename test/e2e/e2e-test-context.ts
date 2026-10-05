@@ -31,10 +31,55 @@ import { SETTING_KEYS } from '../../src/modules/settings/domain/settings.constan
 import { User } from '../../src/modules/users/infrastructure/entity/user.entity';
 import { UserStatus } from '../../src/modules/users/domain/user-status.enum';
 import { MailService } from '../../src/modules/mail/application/mail.service';
+import {
+  AVATAR_STORAGE,
+  type AvatarStorage,
+} from '../../src/modules/users/application/ports/avatar-storage.port';
+import { getStorageToken, ThrottlerStorageService } from '@nestjs/throttler';
 
 export interface TestUsers {
   admin: User;
   user: User;
+}
+
+export const FAKE_AVATAR_PUBLIC_BASE_URL =
+  'https://storage.example.test/avatars/';
+
+/** In-memory stand-in for Supabase Storage; failures can be injected per test. */
+export class FakeAvatarStorage implements AvatarStorage {
+  readonly objects = new Map<
+    string,
+    { content: Buffer; contentType: string }
+  >();
+  failUploads = false;
+  failRemovals = false;
+
+  async upload(storagePath: string, content: Buffer, contentType: string) {
+    if (this.failUploads) {
+      throw new Error('Avatar storage upload failed: injected');
+    }
+    if (this.objects.has(storagePath)) {
+      throw new Error('Avatar storage upload failed: object exists');
+    }
+    this.objects.set(storagePath, { content, contentType });
+  }
+
+  async remove(storagePath: string) {
+    if (this.failRemovals) {
+      throw new Error('Avatar storage remove failed: injected');
+    }
+    this.objects.delete(storagePath);
+  }
+
+  getPublicUrl(storagePath: string) {
+    return `${FAKE_AVATAR_PUBLIC_BASE_URL}${storagePath}`;
+  }
+
+  reset() {
+    this.objects.clear();
+    this.failUploads = false;
+    this.failRemovals = false;
+  }
 }
 
 export interface E2eTestContext {
@@ -43,6 +88,7 @@ export interface E2eTestContext {
   readonly jwtService: JwtService;
   readonly testUsers: TestUsers;
   readonly sentOtps: Array<{ email: string; otp: string }>;
+  readonly avatarStorage: FakeAvatarStorage;
   asAdmin(
     method: 'get' | 'post' | 'put' | 'patch' | 'delete',
     path: string,
@@ -70,6 +116,7 @@ export function createE2eTestContext(): E2eTestContext {
   let jwtService: JwtService;
   let testUsers: TestUsers;
   const sentOtps: Array<{ email: string; otp: string }> = [];
+  const avatarStorage = new FakeAvatarStorage();
   const sendVerificationOtp = jest.fn(async (email: string, otp: string) => {
     sentOtps.push({ email, otp });
   });
@@ -221,6 +268,8 @@ export function createE2eTestContext(): E2eTestContext {
       })
       .overrideProvider(MailService)
       .useValue({ sendVerificationOtp })
+      .overrideProvider(AVATAR_STORAGE)
+      .useValue(avatarStorage)
       .compile();
 
     app = moduleFixture.createNestApplication<NestFastifyApplication>(
@@ -247,6 +296,11 @@ export function createE2eTestContext(): E2eTestContext {
   beforeEach(async () => {
     sendVerificationOtp.mockClear();
     sentOtps.length = 0;
+    avatarStorage.reset();
+    // Per-route throttles must not leak between tests.
+    app
+      .get<ThrottlerStorageService>(getStorageToken(), { strict: false })
+      .storage.clear();
     await seedDatabase();
   });
 
@@ -278,6 +332,7 @@ export function createE2eTestContext(): E2eTestContext {
       return testUsers;
     },
     sentOtps,
+    avatarStorage,
     asAdmin,
     asUser,
     cookieText(response) {

@@ -5,15 +5,18 @@ export enum UserField {
   IS_VERIFIED = 'isVerified',
   CREATED_AT = 'createdAt',
   UPDATED_AT = 'updatedAt',
+  PHOTO = 'photo',
 }
 
 export const PUBLIC_PROFILE_FIELDS = [
   UserField.USER_ID,
   UserField.EMAIL,
+  UserField.PHOTO,
 ] as const;
 
 export const SELF_PROFILE_FIELDS = [
   UserField.USER_ID,
   UserField.EMAIL,
   UserField.STATUS,
+  UserField.PHOTO,
 ] as const;

@@ -15,12 +15,15 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
   ApiOperation,
   ApiParam,
   ApiResponse,
@@ -28,6 +31,7 @@ import {
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { type UUID } from 'node:crypto';
+import { AvatarService } from '../application/avatar.service';
 import { UserMapper } from '../application/mappers/user.mapper';
 import { UsersService } from '../application/users.service';
 import { ConfirmEmailChangeDto } from '../dto/confirm-email-change.dto';
@@ -39,6 +43,7 @@ import { InitiateEmailChangeDto } from '../dto/initiate-email-change.dto';
 import { PaginatedUsersResponseDto } from '../dto/paginated-users-response.dto';
 import { UpdateUserDto } from '../dto/update-user.dto';
 import { UserResponseDto } from '../dto/user-response.dto';
+import { readAvatarUpload } from './avatar-upload.reader';
 
 @ApiTags('Users')
 @ApiBearerAuth()
@@ -47,7 +52,10 @@ import { UserResponseDto } from '../dto/user-response.dto';
 export class UsersContoller {
   private readonly logger = new Logger(UsersService.name);
 
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly avatarService: AvatarService,
+  ) {}
 
   @Get('admin/users')
   @ApiOperation({ summary: 'Get all users' })
@@ -115,7 +123,10 @@ export class UsersContoller {
       throw new NotFoundException('User not found');
     }
     // Map entity to response DTO based on requester identity
-    return UserMapper.toProfileResponseDto(user, req.user);
+    return UserMapper.toProfileResponseDto(
+      this.avatarService.withResolvedPhoto(user),
+      req.user,
+    );
   }
 
   @Post('users')
@@ -190,7 +201,105 @@ export class UsersContoller {
       requestingUser: req.user,
     });
 
-    return UserMapper.toProfileResponseDto(updatedUser, req.user);
+    return UserMapper.toProfileResponseDto(
+      this.avatarService.withResolvedPhoto(updatedUser),
+      req.user,
+    );
+  }
+
+  @Put('users/:id/photo')
+  @ApiOperation({
+    summary: 'Upload or replace a user avatar',
+    description:
+      'Accepts one JPEG, PNG, or WebP image (max 5 MiB) in the `file` field. The image is re-encoded to WebP (max 1024x1024, metadata stripped) and supersedes any URL-based photo.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'User ID (UUID)',
+    type: String,
+    format: 'uuid',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'Avatar image (JPEG, PNG, or WebP, max 5 MiB)',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Avatar uploaded or replaced successfully',
+    type: UserResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Missing, multiple, empty, or invalid image file',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthenticated' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  @ApiResponse({
+    status: 413,
+    description: 'Avatar exceeds the 5 MiB size limit',
+  })
+  @ApiResponse({
+    status: 415,
+    description: 'Unsupported or mismatched image format',
+  })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
+  @ApiResponse({ status: 500, description: 'Avatar could not be stored' })
+  @Throttle({ default: { ttl: 10000, limit: 5 } })
+  @RequirePermission('users', 'update')
+  @AllowSelf('id')
+  async uploadAvatar(@Param('id') id: UUID, @Req() req: AuthenticatedRequest) {
+    const user = await this.avatarService.uploadAvatar({
+      userId: id,
+      requestingUser: req.user,
+      readFile: () => readAvatarUpload(req),
+    });
+
+    return UserMapper.toProfileResponseDto(user, req.user);
+  }
+
+  @Delete('users/:id/photo')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Remove a user avatar',
+    description:
+      'Clears both the uploaded avatar and any URL-based photo. Idempotent.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'User ID (UUID)',
+    type: String,
+    format: 'uuid',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Avatar removed; profile returned with `photo: null`',
+    type: UserResponseDto,
+  })
+  @ApiResponse({ status: 401, description: 'Unauthenticated' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
+  @Throttle({ default: { ttl: 10000, limit: 5 } })
+  @RequirePermission('users', 'update')
+  @AllowSelf('id')
+  async removeAvatar(@Param('id') id: UUID, @Req() req: AuthenticatedRequest) {
+    const user = await this.avatarService.removeAvatar({
+      userId: id,
+      requestingUser: req.user,
+    });
+
+    return UserMapper.toProfileResponseDto(user, req.user);
   }
 
   @Post('users/:id/email-change')

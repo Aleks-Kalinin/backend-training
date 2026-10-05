@@ -38,6 +38,9 @@ export class User {
   @Column({ type: 'varchar', length: 255, nullable: true })
   photo!: string | null;
 
+  @Column({ type: 'varchar', length: 512, nullable: true })
+  avatarStoragePath!: string | null;
+
   @ManyToMany(() => Role, { eager: true })
   @JoinTable({
     name: 'user_roles',
