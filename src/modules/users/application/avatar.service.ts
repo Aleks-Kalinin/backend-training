@@ -16,7 +16,7 @@ import {
   AVATAR_OUTPUT_CONTENT_TYPE,
   AVATAR_OUTPUT_EXTENSION,
 } from '../domain/avatar.constants';
-import { User } from '../domain/entities/user.entity';
+import { User, UserProfile } from '../domain/entities/user.entity';
 import { AvatarCleanupService } from './avatar-cleanup.service';
 import type { AvatarImageProcessor } from './ports/avatar-image-processor.port';
 import { AVATAR_IMAGE_PROCESSOR } from './ports/avatar-image-processor.port';
@@ -76,15 +76,13 @@ export class AvatarService {
   ) {}
 
   /**
-   * Returns a copy of the user whose `photo` is the public avatar URL when an
-   * uploaded avatar exists, otherwise the URL-based photo or `null`.
+   * Returns a copy of the user with `photo` resolved from the stored avatar
+   * path to its public URL, or `null` when no avatar exists.
    */
-  withResolvedPhoto(user: User): User {
+  withResolvedPhoto(user: User): UserProfile {
     return {
       ...user,
-      photo: user.avatarStoragePath
-        ? this.avatarStorage.getPublicUrl(user.avatarStoragePath)
-        : (user.photo ?? null),
+      photo: user.photo ? this.avatarStorage.getPublicUrl(user.photo) : null,
     };
   }
 
@@ -92,14 +90,14 @@ export class AvatarService {
     userId,
     requestingUser,
     readFile,
-  }: UploadAvatarParams): Promise<User> {
+  }: UploadAvatarParams): Promise<UserProfile> {
     const actorUserId = String(requestingUser.sub);
     let operation: AvatarOperation = 'upload';
     let bytes: number | undefined;
 
     try {
       const existing = await this.findAuthorizedUser(userId, requestingUser);
-      if (existing.avatarStoragePath) {
+      if (existing.photo) {
         operation = 'replace';
       }
 
@@ -134,8 +132,7 @@ export class AvatarService {
       let result: Awaited<ReturnType<UserRepository['updateAvatar']>>;
       try {
         result = await this.usersRepository.updateAvatar(userId, {
-          avatarStoragePath: storagePath,
-          photo: null,
+          photo: storagePath,
         });
       } catch (error) {
         await this.avatarCleanupService.removeObject({
@@ -195,14 +192,13 @@ export class AvatarService {
   async removeAvatar({
     userId,
     requestingUser,
-  }: RemoveAvatarParams): Promise<User> {
+  }: RemoveAvatarParams): Promise<UserProfile> {
     const actorUserId = String(requestingUser.sub);
 
     try {
       await this.findAuthorizedUser(userId, requestingUser);
 
       const result = await this.usersRepository.updateAvatar(userId, {
-        avatarStoragePath: null,
         photo: null,
       });
 

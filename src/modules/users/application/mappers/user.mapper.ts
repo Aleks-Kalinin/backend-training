@@ -4,10 +4,13 @@ import {
   PUBLIC_PROFILE_FIELDS,
   SELF_PROFILE_FIELDS,
 } from '../../domain/user-profile-fields.config';
-import { User } from '../../domain/entities/user.entity';
+import { UserProfile } from '../../domain/entities/user.entity';
 
 export class UserMapper {
-  static toProfileResponseDto(targetUser: User, requester: AuthTokenPayload) {
+  static toProfileResponseDto(
+    targetUser: UserProfile,
+    requester: AuthTokenPayload,
+  ) {
     const isSelf = String(targetUser.userId) === String(requester.sub);
 
     const allowedFields = isSelf ? SELF_PROFILE_FIELDS : PUBLIC_PROFILE_FIELDS;

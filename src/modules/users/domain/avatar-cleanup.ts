@@ -3,7 +3,10 @@ export enum AvatarCleanupReason {
   REPLACE = 'replace',
   /** The avatar was removed through DELETE /users/:id/photo. */
   REMOVE = 'remove',
-  /** A URL-based photo PATCH superseded the uploaded object. */
+  /**
+   * @deprecated URL-based photos are no longer supported, so this reason is
+   * no longer produced. Kept so pending legacy cleanup tasks remain readable.
+   */
   PHOTO_URL_UPDATE = 'photo-url-update',
   /** The user record could not be updated after upload; the new object is orphaned. */
   ROLLBACK = 'rollback',

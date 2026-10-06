@@ -42,7 +42,6 @@ import {
   UserRoleRepository,
 } from '../ports/role-repository.port';
 import { USER_REPOSITORY, UserRepository } from '../ports/user-repository.port';
-import { AvatarCleanupReason } from '../../domain/avatar-cleanup';
 import { AvatarCleanupService } from '../avatar-cleanup.service';
 import { UsersService } from '../users.service';
 
@@ -450,7 +449,6 @@ describe('UsersService', () => {
         status: UserStatus.ACTIVE,
         isVerified: true,
         photo: null,
-        avatarStoragePath: null,
       });
       expect(usersRepository.save).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -470,7 +468,7 @@ describe('UsersService', () => {
       await expect(
         service.updateUser({
           userId,
-          updateData: { photo: 'http://pic.jpg' },
+          updateData: { status: UserStatus.ACTIVE },
         }),
       ).rejects.toThrow('User not found');
     });
@@ -487,7 +485,7 @@ describe('UsersService', () => {
       await expect(
         service.updateUser({
           userId,
-          updateData: { photo: 'http://pic.jpg' },
+          updateData: { status: UserStatus.ACTIVE },
           requestingUser: otherUserPayload,
         }),
       ).rejects.toThrow(ForbiddenException);
@@ -525,7 +523,7 @@ describe('UsersService', () => {
     it('successfully updates user data as admin or self', async () => {
       usersRepository.findOne.mockResolvedValue({ ...mockUser });
 
-      const updateDto: UpdateUserDto = { photo: 'http://newphoto.png' };
+      const updateDto: UpdateUserDto = { status: UserStatus.BLOCKED };
 
       const result = await service.updateUser({
         userId,
@@ -534,43 +532,16 @@ describe('UsersService', () => {
       });
 
       expect(usersRepository.save).toHaveBeenCalledWith(
-        expect.objectContaining({ photo: 'http://newphoto.png' }),
+        expect.objectContaining({ status: UserStatus.BLOCKED }),
       );
       expect(result).toBeDefined();
       expect(avatarCleanupService.removeObject).not.toHaveBeenCalled();
     });
 
-    it('clears an uploaded avatar and removes its object after saving a URL photo', async () => {
+    it('preserves the uploaded avatar when updating unrelated fields', async () => {
       usersRepository.findOne.mockResolvedValue({
         ...mockUser,
-        avatarStoragePath: `${userId}/old.webp`,
-      });
-
-      const result = await service.updateUser({
-        userId,
-        updateData: { photo: 'https://cdn.example.com/me.png' },
-        requestingUser: mockRegularUserPayload,
-      });
-
-      expect(result).toMatchObject({
-        photo: 'https://cdn.example.com/me.png',
-        avatarStoragePath: null,
-      });
-      expect(avatarCleanupService.removeObject).toHaveBeenCalledWith({
-        storagePath: `${userId}/old.webp`,
-        actorUserId: mockRegularUserPayload.sub,
-        targetUserId: userId,
-        reason: AvatarCleanupReason.PHOTO_URL_UPDATE,
-      });
-      expect(usersRepository.save.mock.invocationCallOrder[0]).toBeLessThan(
-        avatarCleanupService.removeObject.mock.invocationCallOrder[0],
-      );
-    });
-
-    it('keeps the uploaded avatar when the PATCH does not touch photo', async () => {
-      usersRepository.findOne.mockResolvedValue({
-        ...mockUser,
-        avatarStoragePath: `${userId}/current.webp`,
+        photo: `${userId}/current.webp`,
       });
 
       const result = await service.updateUser({
@@ -579,25 +550,29 @@ describe('UsersService', () => {
         requestingUser: mockAdminUserPayload,
       });
 
-      expect(result.avatarStoragePath).toBe(`${userId}/current.webp`);
+      expect(result.photo).toBe(`${userId}/current.webp`);
       expect(avatarCleanupService.removeObject).not.toHaveBeenCalled();
     });
 
-    it('does not remove the uploaded object when saving the URL photo fails', async () => {
+    it('does not touch the avatar when a self update is saved', async () => {
       usersRepository.findOne.mockResolvedValue({
         ...mockUser,
-        avatarStoragePath: `${userId}/current.webp`,
+        photo: `${userId}/current.webp`,
       });
-      usersRepository.save.mockRejectedValueOnce(new Error('DB down'));
 
-      await expect(
-        service.updateUser({
-          userId,
-          updateData: { photo: 'https://cdn.example.com/me.png' },
-          requestingUser: mockRegularUserPayload,
+      await service.updateUser({
+        userId,
+        updateData: { status: UserStatus.ACTIVE },
+        requestingUser: mockRegularUserPayload,
+      });
+
+      expect(usersRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          photo: `${userId}/current.webp`,
         }),
-      ).rejects.toThrow('DB down');
+      );
       expect(avatarCleanupService.removeObject).not.toHaveBeenCalled();
+      expect(avatarCleanupService.removeUserAvatar).not.toHaveBeenCalled();
     });
   });
 
@@ -849,7 +824,7 @@ describe('UsersService', () => {
 
       await service.processUserDeletion({
         job,
-        user: { ...mockUser, avatarStoragePath: `${mockUser.userId}/a.webp` },
+        user: { ...mockUser, photo: `${mockUser.userId}/a.webp` },
         operationType: 'admin',
       });
 
@@ -878,7 +853,7 @@ describe('UsersService', () => {
       await expect(
         service.processUserDeletion({
           job,
-          user: { ...mockUser, avatarStoragePath: `${mockUser.userId}/a.webp` },
+          user: { ...mockUser, photo: `${mockUser.userId}/a.webp` },
           operationType: 'self',
         }),
       ).rejects.toThrow('Avatar cleanup could not be completed or recorded');

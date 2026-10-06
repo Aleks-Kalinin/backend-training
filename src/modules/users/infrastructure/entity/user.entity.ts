@@ -35,11 +35,9 @@ export class User {
   @UpdateDateColumn()
   updatedAt!: Date;
 
+  /** Bucket-relative storage path of the uploaded avatar. */
   @Column({ type: 'varchar', length: 255, nullable: true })
   photo!: string | null;
-
-  @Column({ type: 'varchar', length: 512, nullable: true })
-  avatarStoragePath!: string | null;
 
   @ManyToMany(() => Role, { eager: true })
   @JoinTable({

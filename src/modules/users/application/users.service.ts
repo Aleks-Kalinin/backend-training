@@ -20,7 +20,6 @@ import {
   DeletionJobStatus,
   UserDeletionJob,
 } from '../domain/deletion';
-import { AvatarCleanupReason } from '../domain/avatar-cleanup';
 import { User } from '../domain/entities/user.entity';
 import { UserStatus } from '../domain/user-status.enum';
 import { ConfirmEmailChangeDto } from '../dto/confirm-email-change.dto';
@@ -227,7 +226,6 @@ export class UsersService {
       status: status ?? UserStatus.PENDING,
       isVerified,
       photo: null,
-      avatarStoragePath: null,
     });
 
     const userRole = await this.roleRepository.findDefaultRole();
@@ -306,25 +304,9 @@ export class UsersService {
       updateData.email = updateData.email.toLowerCase().trim();
     }
 
-    // A URL-based photo supersedes any uploaded avatar.
-    const replacedStoragePath =
-      updateData.photo !== undefined ? (user.avatarStoragePath ?? null) : null;
-
     Object.assign(user, updateData);
-    if (updateData.photo !== undefined) {
-      user.avatarStoragePath = null;
-    }
 
     const savedUser = await this.usersRepository.save(user);
-
-    if (replacedStoragePath) {
-      await this.avatarCleanupService.removeObject({
-        storagePath: replacedStoragePath,
-        actorUserId,
-        targetUserId: userId,
-        reason: AvatarCleanupReason.PHOTO_URL_UPDATE,
-      });
-    }
 
     const changedFields = Object.keys(updateData);
     this.logUserUpdateAudit({
@@ -578,7 +560,7 @@ export class UsersService {
       job.status = DeletionJobStatus.IN_PROGRESS;
       await this.userDeletionJobRepository.save(job);
 
-      const avatarStoragePath = user.avatarStoragePath ?? null;
+      const avatarStoragePath = user.photo ?? null;
       await this.usersRepository.remove(user);
       await this.avatarCleanupService.removeUserAvatar({
         storagePath: avatarStoragePath,

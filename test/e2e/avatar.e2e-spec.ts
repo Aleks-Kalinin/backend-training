@@ -43,18 +43,17 @@ describe('Avatar upload HTTP e2e', () => {
       .expect(200);
 
     const stored = await findUser(userId);
-    expect(stored.avatarStoragePath).toMatch(
+    expect(stored.photo).toMatch(
       new RegExp(`^${userId}/[0-9a-f-]{36}\\.webp$`),
     );
-    expect(stored.photo).toBeNull();
     expect(response.body).toEqual({
       userId,
       email: context.testUsers.user.email,
       status: context.testUsers.user.status,
-      photo: `${FAKE_AVATAR_PUBLIC_BASE_URL}${stored.avatarStoragePath}`,
+      photo: `${FAKE_AVATAR_PUBLIC_BASE_URL}${stored.photo}`,
     });
 
-    const object = context.avatarStorage.objects.get(stored.avatarStoragePath!);
+    const object = context.avatarStorage.objects.get(stored.photo!);
     expect(object?.contentType).toBe('image/webp');
     const metadata = await sharp(object!.content).metadata();
     expect(metadata).toMatchObject({
@@ -67,7 +66,6 @@ describe('Avatar upload HTTP e2e', () => {
       .asAdmin('get', `/users/${userId}`)
       .expect(200);
     expect(profile.body.photo).toBe(response.body.photo);
-    expect(profile.body.avatarStoragePath).toBeUndefined();
   });
 
   it('replaces an avatar under a new key and removes the previous object', async () => {
@@ -77,13 +75,13 @@ describe('Avatar upload HTTP e2e', () => {
       .asUser('put', userPhotoPath())
       .attach('file', png, { filename: 'a.png', contentType: 'image/png' })
       .expect(200);
-    const firstPath = (await findUser(userId)).avatarStoragePath!;
+    const firstPath = (await findUser(userId)).photo!;
 
     const second = await context
       .asUser('put', userPhotoPath())
       .attach('file', jpeg, { filename: 'b.jpg', contentType: 'image/jpeg' })
       .expect(200);
-    const secondPath = (await findUser(userId)).avatarStoragePath!;
+    const secondPath = (await findUser(userId)).photo!;
 
     expect(secondPath).not.toBe(firstPath);
     expect(second.body.photo).toBe(
@@ -177,9 +175,7 @@ describe('Avatar upload HTTP e2e', () => {
       .expect(415);
 
     expect(context.avatarStorage.objects.size).toBe(0);
-    expect(
-      (await findUser(context.testUsers.user.userId)).avatarStoragePath,
-    ).toBeNull();
+    expect((await findUser(context.testUsers.user.userId)).photo).toBeNull();
   });
 
   it('rejects files over 5 MiB with 413', async () => {
@@ -202,7 +198,7 @@ describe('Avatar upload HTTP e2e', () => {
       .asUser('put', userPhotoPath())
       .attach('file', png, { filename: 'a.png', contentType: 'image/png' })
       .expect(200);
-    const currentPath = (await findUser(userId)).avatarStoragePath;
+    const currentPath = (await findUser(userId)).photo;
 
     context.avatarStorage.failUploads = true;
     const failed = await context
@@ -211,7 +207,7 @@ describe('Avatar upload HTTP e2e', () => {
       .expect(500);
 
     expect(JSON.stringify(failed.body)).not.toContain('injected');
-    expect((await findUser(userId)).avatarStoragePath).toBe(currentPath);
+    expect((await findUser(userId)).photo).toBe(currentPath);
   });
 
   it('keeps the new avatar and records a retryable task when old-object cleanup fails', async () => {
@@ -220,7 +216,7 @@ describe('Avatar upload HTTP e2e', () => {
       .asUser('put', userPhotoPath())
       .attach('file', png, { filename: 'a.png', contentType: 'image/png' })
       .expect(200);
-    const oldPath = (await findUser(userId)).avatarStoragePath;
+    const oldPath = (await findUser(userId)).photo;
 
     context.avatarStorage.failRemovals = true;
     await context
@@ -228,7 +224,7 @@ describe('Avatar upload HTTP e2e', () => {
       .attach('file', jpeg, { filename: 'b.jpg', contentType: 'image/jpeg' })
       .expect(200);
 
-    const newPath = (await findUser(userId)).avatarStoragePath;
+    const newPath = (await findUser(userId)).photo;
     expect(newPath).not.toBe(oldPath);
     const tasks = await context.dataSource
       .getRepository(AvatarCleanupTaskEntity)
@@ -253,56 +249,97 @@ describe('Avatar upload HTTP e2e', () => {
     const removed = await context.asUser('delete', userPhotoPath()).expect(200);
     expect(removed.body.photo).toBeNull();
     expect(context.avatarStorage.objects.size).toBe(0);
-    expect(await findUser(userId)).toMatchObject({
-      photo: null,
-      avatarStoragePath: null,
-    });
+    expect((await findUser(userId)).photo).toBeNull();
 
     const again = await context.asUser('delete', userPhotoPath()).expect(200);
     expect(again.body.photo).toBeNull();
   });
 
-  it('removing an avatar also clears a URL-based photo', async () => {
-    await context
-      .asUser('patch', `/users/${context.testUsers.user.userId}`)
-      .send({ photo: 'https://cdn.example.test/me.png' })
+  it('ignores photo URLs on PATCH and preserves the uploaded avatar', async () => {
+    const userId = context.testUsers.user.userId;
+    const uploaded = await context
+      .asUser('put', userPhotoPath())
+      .attach('file', png, { filename: 'a.png', contentType: 'image/png' })
       .expect(200);
+    const storagePath = (await findUser(userId)).photo;
 
-    const removed = await context.asUser('delete', userPhotoPath()).expect(200);
-    expect(removed.body.photo).toBeNull();
+    for (const photo of [
+      'https://cdn.example.test/me.png',
+      'javascript:alert(1)',
+      null,
+    ]) {
+      const patched = await context
+        .asUser('patch', `/users/${userId}`)
+        .send({ status: context.testUsers.user.status, photo })
+        .expect(200);
+      expect(patched.body.photo).toBe(uploaded.body.photo);
+    }
+
+    expect((await findUser(userId)).photo).toBe(storagePath);
+    expect(context.avatarStorage.objects.has(storagePath!)).toBe(true);
+    expect(
+      await context.dataSource.getRepository(AvatarCleanupTaskEntity).count(),
+    ).toBe(0);
   });
 
-  it('lets a URL-based PATCH supersede an uploaded avatar and cleans up the object', async () => {
-    const userId = context.testUsers.user.userId;
-    await context
+  it('does not let user creation set a photo URL', async () => {
+    const created = await context
+      .asAdmin('post', '/users')
+      .send({
+        email: 'with-photo@example.test',
+        password: 'Password123',
+        isVerified: true,
+        photo: 'https://cdn.example.test/me.png',
+      })
+      .expect(201);
+
+    expect(created.body.photo).toBeNull();
+    const stored = await context.dataSource
+      .getRepository(User)
+      .findOneByOrFail({ email: 'with-photo@example.test' });
+    expect(stored.photo).toBeNull();
+  });
+
+  it('exposes the public photo URL, not the stored path, in the admin list', async () => {
+    const uploaded = await context
       .asUser('put', userPhotoPath())
       .attach('file', png, { filename: 'a.png', contentType: 'image/png' })
       .expect(200);
 
-    const patched = await context
-      .asUser('patch', `/users/${userId}`)
-      .send({ photo: 'https://cdn.example.test/me.png' })
+    const list = await context
+      .asAdmin('get', '/admin/users?limit=10')
       .expect(200);
+    const items = list.body.items as Record<string, unknown>[];
 
-    expect(patched.body.photo).toBe('https://cdn.example.test/me.png');
-    expect(await findUser(userId)).toMatchObject({
-      photo: 'https://cdn.example.test/me.png',
-      avatarStoragePath: null,
-    });
-    expect(context.avatarStorage.objects.size).toBe(0);
+    expect(items).toEqual(
+      expect.arrayContaining([
+        {
+          userId: context.testUsers.user.userId,
+          email: context.testUsers.user.email,
+          photo: uploaded.body.photo,
+        },
+        expect.objectContaining({
+          userId: context.testUsers.admin.userId,
+          photo: null,
+        }),
+      ]),
+    );
+    expect(uploaded.body.photo).toBe(
+      `${FAKE_AVATAR_PUBLIC_BASE_URL}${(await findUser(context.testUsers.user.userId)).photo}`,
+    );
+    for (const item of items) {
+      expect(item).not.toHaveProperty('password');
+    }
   });
 
-  it('rejects non-http(s) photo URLs on PATCH', async () => {
-    const userId = context.testUsers.user.userId;
+  it('stores the avatar path in users.photo and has no avatarStoragePath column', async () => {
+    const columns: { column_name: string }[] = await context.dataSource.query(
+      `SELECT column_name FROM information_schema.columns WHERE table_name = 'users'`,
+    );
+    const names = columns.map((column) => column.column_name);
 
-    await context
-      .asUser('patch', `/users/${userId}`)
-      .send({ photo: 'javascript:alert(1)' })
-      .expect(400);
-    await context
-      .asUser('patch', `/users/${userId}`)
-      .send({ photo: 'ftp://files.example.test/me.png' })
-      .expect(400);
+    expect(names).toContain('photo');
+    expect(names).not.toContain('avatarStoragePath');
   });
 
   it('deletes the avatar object when the account is deleted', async () => {

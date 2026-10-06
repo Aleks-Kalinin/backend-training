@@ -81,7 +81,9 @@ The migrations in `src/database/migrations` are incremental and do not create th
 
 ## Avatar storage (Supabase)
 
-`PUT /api/v1/users/:id/photo` (multipart, `file` field) and `DELETE /api/v1/users/:id/photo` manage uploaded profile avatars. Uploads are re-encoded to WebP (max 1024×1024, metadata stripped) and stored in Supabase Storage under `{userId}/{uuid}.webp`. The profile `photo` field returns the object's public URL when an upload exists, otherwise the URL-based photo set via `PATCH /api/v1/users/:id`.
+`PUT /api/v1/users/:id/photo` (multipart, `file` field) and `DELETE /api/v1/users/:id/photo` manage uploaded profile avatars. Uploads are re-encoded to WebP (max 1024×1024, metadata stripped) and stored in Supabase Storage under `{userId}/{uuid}.webp`. These endpoints are the only way to set an avatar: user creation and `PATCH /api/v1/users/:id` do not accept a `photo` URL, and profile updates never change the current avatar. The `users.photo` column stores the avatar's bucket-relative storage path (`null` until an avatar is uploaded); the `photo` field in profile and admin-list responses is resolved from it to the object's public URL, or `null` when no avatar is set.
+
+The `MoveAvatarPathToPhoto` migration moves stored avatar paths from the former `avatarStoragePath` column into `users.photo` and drops `avatarStoragePath`. Legacy external photo URLs left in `photo` are cleared, not imported; reverting the migration cannot restore them.
 
 **Configuration** (server-side only; the app fails to start without them unless `NODE_ENV=test`):
 

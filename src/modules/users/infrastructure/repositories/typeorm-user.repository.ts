@@ -98,7 +98,7 @@ export class TypeOrmUserRepository implements UserRepository {
       // object is reported to exactly one caller for cleanup.
       const locked = await repository
         .createQueryBuilder('user')
-        .select(['user.userId', 'user.avatarStoragePath'])
+        .select(['user.userId', 'user.photo'])
         .where('user.userId = :userId', { userId })
         .setLock('pessimistic_write')
         .getOne();
@@ -113,7 +113,7 @@ export class TypeOrmUserRepository implements UserRepository {
 
       return {
         user: user as DomainUser,
-        previousStoragePath: locked.avatarStoragePath,
+        previousStoragePath: locked.photo,
       };
     });
   }

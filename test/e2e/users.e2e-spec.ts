@@ -34,6 +34,10 @@ describe('Users HTTP e2e', () => {
       ]),
     );
     expect(list.body.nextCursor).toBeNull();
+    for (const item of list.body.items) {
+      expect(item.photo).toBeNull();
+      expect(item.password).toBeUndefined();
+    }
 
     await context
       .asUser('post', '/users')
@@ -59,6 +63,7 @@ describe('Users HTTP e2e', () => {
       })
       .expect(201);
     expect(created.body.email).toBe('created@example.test');
+    expect(created.body.photo).toBeNull();
     expect(
       await context.dataSource
         .getRepository(User)
@@ -67,14 +72,19 @@ describe('Users HTTP e2e', () => {
   });
 
   it('updates a user profile and prevents direct self-service email changes', async () => {
-    await context
+    const updated = await context
       .asUser('patch', `/users/${context.testUsers.user.userId}`)
-      .send({ photo: 'https://example.test/avatar.png' })
+      .send({
+        status: UserStatus.ACTIVE,
+        photo: 'https://example.test/avatar.png',
+      })
       .expect(200);
+    expect(updated.body.photo).toBeNull();
     const updatedUser = await context.dataSource
       .getRepository(User)
       .findOneByOrFail({ userId: context.testUsers.user.userId });
-    expect(updatedUser.photo).toBe('https://example.test/avatar.png');
+    expect(updatedUser.status).toBe(UserStatus.ACTIVE);
+    expect(updatedUser.photo).toBeNull();
 
     await context
       .asUser('patch', `/users/${context.testUsers.user.userId}`)

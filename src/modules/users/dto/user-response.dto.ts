@@ -11,7 +11,7 @@ export class UserResponseDto {
     type: String,
     nullable: true,
     description:
-      'Public avatar URL. Points to the uploaded avatar when one exists, otherwise to the URL-based photo.',
+      'Public URL of the uploaded avatar, computed from its storage location, or null when no avatar is set. Set it only through PUT /users/{id}/photo.',
     example:
       'https://example.supabase.co/storage/v1/object/public/avatars/0c6300a2-46c4-4264-af41-7c493d242253/5f0c.webp',
   })

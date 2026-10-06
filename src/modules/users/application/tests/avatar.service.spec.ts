@@ -42,7 +42,6 @@ describe('AvatarService', () => {
     createdAt: new Date(),
     updatedAt: new Date(),
     photo: null,
-    avatarStoragePath: null,
     roles: [],
   };
 
@@ -116,22 +115,14 @@ describe('AvatarService', () => {
   });
 
   describe('withResolvedPhoto', () => {
-    it('prefers the uploaded avatar public URL over the URL-based photo', () => {
-      const user = service.withResolvedPhoto({
-        ...baseUser,
-        photo: 'https://legacy.example/me.png',
-        avatarStoragePath: `${USER_ID}/a.webp`,
-      });
+    it('computes photo as the public URL of the uploaded avatar', () => {
+      const stored = { ...baseUser, photo: `${USER_ID}/a.webp` };
+      const user = service.withResolvedPhoto(stored);
       expect(user.photo).toBe(`${PUBLIC_BASE}${USER_ID}/a.webp`);
+      expect(stored.photo).toBe(`${USER_ID}/a.webp`);
     });
 
-    it('falls back to the URL-based photo, then null', () => {
-      expect(
-        service.withResolvedPhoto({
-          ...baseUser,
-          photo: 'https://legacy.example/me.png',
-        }).photo,
-      ).toBe('https://legacy.example/me.png');
+    it('returns a null photo when no avatar is stored', () => {
       expect(service.withResolvedPhoto(baseUser).photo).toBeNull();
       expect(avatarStorage.getPublicUrl).not.toHaveBeenCalled();
     });
@@ -139,10 +130,7 @@ describe('AvatarService', () => {
 
   describe('uploadAvatar', () => {
     it('processes, stores under an opaque per-user key, and returns the public URL', async () => {
-      usersRepository.findById.mockResolvedValue({
-        ...baseUser,
-        photo: 'https://legacy.example/me.png',
-      });
+      usersRepository.findById.mockResolvedValue(baseUser);
 
       const result = await service.uploadAvatar({
         userId: USER_ID,
@@ -160,8 +148,7 @@ describe('AvatarService', () => {
       expect(content).toBe(processed);
       expect(contentType).toBe('image/webp');
       expect(usersRepository.updateAvatar).toHaveBeenCalledWith(USER_ID, {
-        avatarStoragePath: storagePath,
-        photo: null,
+        photo: storagePath,
       });
       expect(result.photo).toBe(`${PUBLIC_BASE}${storagePath}`);
       expect(avatarCleanupService.removeObject).not.toHaveBeenCalled();
@@ -244,7 +231,7 @@ describe('AvatarService', () => {
     it('deletes the new object and propagates the original error when the DB update fails', async () => {
       usersRepository.findById.mockResolvedValue({
         ...baseUser,
-        avatarStoragePath: `${USER_ID}/current.webp`,
+        photo: `${USER_ID}/current.webp`,
       });
       const dbError = new Error('connection reset');
       usersRepository.updateAvatar.mockRejectedValue(dbError);
@@ -290,7 +277,7 @@ describe('AvatarService', () => {
     it('removes the previous object only after the DB update succeeds', async () => {
       usersRepository.findById.mockResolvedValue({
         ...baseUser,
-        avatarStoragePath: `${USER_ID}/old.webp`,
+        photo: `${USER_ID}/old.webp`,
       });
       usersRepository.updateAvatar.mockImplementation((userId, change) =>
         Promise.resolve({
@@ -336,16 +323,17 @@ describe('AvatarService', () => {
         readFile,
       });
 
-      expect(result.avatarStoragePath).toMatch(STORAGE_PATH_PATTERN);
-      expect(result.photo).toBe(`${PUBLIC_BASE}${result.avatarStoragePath}`);
+      const [, change] = usersRepository.updateAvatar.mock.calls[0];
+      expect(change.photo).toMatch(STORAGE_PATH_PATTERN);
+      expect(result.photo).toBe(`${PUBLIC_BASE}${change.photo}`);
     });
   });
 
   describe('removeAvatar', () => {
-    it('clears both photo fields and removes the uploaded object', async () => {
+    it('clears the avatar reference and removes the uploaded object', async () => {
       usersRepository.findById.mockResolvedValue({
         ...baseUser,
-        avatarStoragePath: `${USER_ID}/old.webp`,
+        photo: `${USER_ID}/old.webp`,
       });
       usersRepository.updateAvatar.mockImplementation((userId, change) =>
         Promise.resolve({
@@ -360,7 +348,6 @@ describe('AvatarService', () => {
       });
 
       expect(usersRepository.updateAvatar).toHaveBeenCalledWith(USER_ID, {
-        avatarStoragePath: null,
         photo: null,
       });
       expect(avatarCleanupService.removeObject).toHaveBeenCalledWith(
@@ -372,7 +359,7 @@ describe('AvatarService', () => {
       expect(result.photo).toBeNull();
     });
 
-    it('is idempotent when no photo is set', async () => {
+    it('is idempotent when no avatar is set', async () => {
       usersRepository.findById.mockResolvedValue(baseUser);
 
       const result = await service.removeAvatar({

@@ -77,8 +77,20 @@ export class UsersContoller {
     @Query() query: GetUsersQueryDto,
     @Req() req: AuthenticatedRequest,
   ) {
-    const users = await this.usersService.getUsers(query, req.user.sub);
-    return users;
+    const { items, nextCursor } = await this.usersService.getUsers(
+      query,
+      req.user.sub,
+    );
+
+    return {
+      items: items.map((user) =>
+        UserMapper.toProfileResponseDto(
+          this.avatarService.withResolvedPhoto(user),
+          req.user,
+        ),
+      ),
+      nextCursor,
+    };
   }
 
   @Get('users/:id')
@@ -151,11 +163,15 @@ export class UsersContoller {
   @RequirePermission('users', 'create')
   async createUser(@Body() createUserDto: CreateUserDto) {
     const user = await this.usersService.createUser(createUserDto);
-    return user;
+    return this.avatarService.withResolvedPhoto(user);
   }
 
   @Patch('users/:id')
-  @ApiOperation({ summary: 'Update an existing user' })
+  @ApiOperation({
+    summary: 'Update an existing user',
+    description:
+      'Updates profile fields. Does not accept `photo` and never changes the current avatar; use PUT/DELETE /users/{id}/photo instead.',
+  })
   @ApiParam({
     name: 'id',
     description: 'User ID (UUID)',
@@ -211,7 +227,7 @@ export class UsersContoller {
   @ApiOperation({
     summary: 'Upload or replace a user avatar',
     description:
-      'Accepts one JPEG, PNG, or WebP image (max 5 MiB) in the `file` field. The image is re-encoded to WebP (max 1024x1024, metadata stripped) and supersedes any URL-based photo.',
+      'Accepts one JPEG, PNG, or WebP image (max 5 MiB) in the `file` field. The image is re-encoded to WebP (max 1024x1024, metadata stripped) and replaces any previous avatar.',
   })
   @ApiParam({
     name: 'id',
@@ -273,7 +289,7 @@ export class UsersContoller {
   @ApiOperation({
     summary: 'Remove a user avatar',
     description:
-      'Clears both the uploaded avatar and any URL-based photo. Idempotent.',
+      'Clears the uploaded avatar and deletes its stored object. Idempotent.',
   })
   @ApiParam({
     name: 'id',

@@ -5,7 +5,7 @@
 * **Target Roles:**
   * **Self:** Authenticated user requesting their own profile.
   * **Support / Admin:** Administrative roles requesting another user's profile (requires explicit RBAC permission).
-* **Dependencies:** Access JWT (Cookie), RBAC Module, Photo Storage Service (URL/File reference).
+* **Dependencies:** Access JWT (Cookie), RBAC Module, Supabase avatar URL resolution.
 
 ## 2. Technical Contract
 
@@ -22,7 +22,7 @@
 
 * **Response Field Masking (Default-Deny Policy):**
   * The API must apply server-side field filtering based on the requester's role.
-  * **Self Payload:** Full profile data (`id`, `email`, `photo`, personal settings, and permitted profile fields).
+  * **Self Payload:** Full profile data (`id`, `email`, `photo`, personal settings, and permitted profile fields). `photo` is the public Supabase URL resolved from the avatar storage path stored in the `photo` column, or `null` when no avatar is set; it is never a user-supplied URL.
   * **Support/Admin Payload:** Return only fields explicitly allowed by the RBAC configuration policy. Unpermitted fields must be omitted from the output object.
 
 * **Execution Logic:**

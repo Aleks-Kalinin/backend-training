@@ -20,13 +20,16 @@ export interface User {
   createdAt: Date;
   updatedAt: Date;
   /**
-   * URL-based photo set through the profile update endpoint.
+   * Bucket-relative storage path of the uploaded avatar (for example
+   * `{userId}/{uuid}.webp`), or `null` when no avatar is set. Profile
+   * responses expose it as a public URL; see `UserProfile`.
    */
   photo: string | null;
-  /**
-   * Bucket-relative key of an uploaded avatar. When set, it takes precedence
-   * over `photo` in profile responses.
-   */
-  avatarStoragePath?: string | null;
   roles: UserRole[];
 }
+
+/**
+ * User as exposed in profile responses: `photo` is the public URL resolved
+ * from the stored avatar path (or `null`), never the raw storage path.
+ */
+export type UserProfile = Omit<User, 'photo'> & { photo: string | null };

@@ -28,7 +28,7 @@
   4. Block future authentication attempts for target account.
   5. Execute deletion/anonymization pipeline:
      * Scrub or mask all PII profile fields (email, name, personal data).
-     * Delete user-uploaded assets (photos, media files) from storage.
+     * Delete user-uploaded assets (including Supabase-hosted avatars) from storage.
      * Process or cascade domain-specific related entities according to data retention policies.
   6. Pipeline can be executed **synchronously** or delegated **asynchronously** to a job queue.
 

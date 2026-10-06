@@ -39,7 +39,7 @@ export class UserDeletionListener {
       job.status = DeletionJobStatus.IN_PROGRESS;
       await this.userDeletionJobRepository.save(job);
 
-      const avatarStoragePath = user.avatarStoragePath ?? null;
+      const avatarStoragePath = user.photo ?? null;
       await this.usersRepository.remove(user);
       await this.avatarCleanupService.removeUserAvatar({
         storagePath: avatarStoragePath,

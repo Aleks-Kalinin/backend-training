@@ -14,7 +14,6 @@ export interface UserSearch {
 
 export interface AvatarChange {
   photo: string | null;
-  avatarStoragePath: string | null;
 }
 
 export interface AvatarChangeResult {
@@ -32,7 +31,7 @@ export interface UserRepository {
   save(user: User): Promise<User>;
   remove(user: User): Promise<void>;
   /**
-   * Atomically replaces the user's photo fields, returning the storage path
+   * Atomically replaces the user's avatar reference, returning the storage path
    * that was referenced before the change. Returns `null` if the user no
    * longer exists.
    */
