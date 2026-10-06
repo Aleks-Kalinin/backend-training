@@ -35,6 +35,7 @@ export class User {
   @UpdateDateColumn()
   updatedAt!: Date;
 
+  /** Bucket-relative storage path of the uploaded avatar. */
   @Column({ type: 'varchar', length: 255, nullable: true })
   photo!: string | null;
 

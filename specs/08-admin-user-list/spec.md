@@ -6,7 +6,7 @@
 - **Target Roles:**
   - **Admin:** Granted access via explicit RBAC permission (`users.list.admin`).
   - **Other Roles:** Access strictly prohibited (`403 Forbidden`).
-- **Dependencies:** Access JWT (Cookie), RBAC Module, Database Search Indexes, File Storage Service (for avatar URL resolution).
+- **Dependencies:** Access JWT (Cookie), RBAC Module, Database Search Indexes, Supabase avatar URL resolution.
 
 ## 2. Technical Contract
 
@@ -41,6 +41,7 @@
     "nextCursor": "string | null"
   }
   ```
+  `photo` is the public Supabase URL resolved from the avatar storage path stored in the user's `photo` column, or `null` when no avatar is set. It is never an externally supplied URL, and the raw storage path is not exposed.
 
 ## 3. Error Handling & Limits
 

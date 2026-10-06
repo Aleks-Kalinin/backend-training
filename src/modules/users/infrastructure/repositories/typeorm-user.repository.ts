@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
+  AvatarChange,
+  AvatarChangeResult,
   UserRepository,
   UserSearch,
 } from '../../application/ports/user-repository.port';
@@ -83,5 +85,36 @@ export class TypeOrmUserRepository implements UserRepository {
 
   async remove(user: DomainUser) {
     await this.repository.remove(user as User);
+  }
+
+  async updateAvatar(
+    userId: string,
+    change: AvatarChange,
+  ): Promise<AvatarChangeResult | null> {
+    return this.repository.manager.transaction(async (manager) => {
+      const repository = manager.getRepository(User);
+
+      // Row lock serializes concurrent avatar changes so each replaced
+      // object is reported to exactly one caller for cleanup.
+      const locked = await repository
+        .createQueryBuilder('user')
+        .select(['user.userId', 'user.photo'])
+        .where('user.userId = :userId', { userId })
+        .setLock('pessimistic_write')
+        .getOne();
+
+      if (!locked) {
+        return null;
+      }
+
+      await repository.update({ userId }, change);
+
+      const user = await repository.findOneOrFail({ where: { userId } });
+
+      return {
+        user: user as DomainUser,
+        previousStoragePath: locked.photo,
+      };
+    });
   }
 }

@@ -7,9 +7,11 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  IsUrl,
   Matches,
   Max,
   Min,
+  ValidateIf,
   validateSync,
 } from 'class-validator';
 
@@ -119,6 +121,36 @@ class EnvironmentVariables implements Config {
   @IsBoolean()
   @IsOptional()
   POSTGRES_MIGRATIONS_RUN = false;
+
+  @ValidateIf(isSupabaseConfigRequired)
+  @IsUrl({
+    protocols: ['http', 'https'],
+    require_protocol: true,
+    require_tld: false,
+  })
+  SUPABASE_URL?: string;
+
+  @ValidateIf(isSupabaseConfigRequired)
+  @IsString()
+  @IsNotEmpty()
+  SUPABASE_SERVICE_ROLE_KEY?: string;
+
+  @IsString()
+  @Matches(/^[a-z0-9][a-z0-9._-]{1,62}$/)
+  @IsOptional()
+  SUPABASE_AVATARS_BUCKET = 'avatars';
+}
+
+/**
+ * Supabase settings are mandatory except in tests, where the storage adapter
+ * is replaced by a fake. Partially provided test settings are still validated.
+ */
+function isSupabaseConfigRequired(config: EnvironmentVariables): boolean {
+  return (
+    config.NODE_ENV !== 'test' ||
+    config.SUPABASE_URL !== undefined ||
+    config.SUPABASE_SERVICE_ROLE_KEY !== undefined
+  );
 }
 
 export function validateConfig(

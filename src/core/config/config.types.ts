@@ -35,4 +35,12 @@ export interface Config {
   POSTGRES_SYNCHRONIZE?: boolean;
   POSTGRES_LOGGING?: boolean;
   POSTGRES_MIGRATIONS_RUN?: boolean;
+
+  /**
+   * Supabase Storage options (avatar uploads). Required outside of tests.
+   * The service-role key is server-only and must never reach clients.
+   */
+  SUPABASE_URL?: string;
+  SUPABASE_SERVICE_ROLE_KEY?: string;
+  SUPABASE_AVATARS_BUCKET?: string;
 }

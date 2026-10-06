@@ -75,9 +75,32 @@ Unit tests continue to mock repositories. The e2e suite also exercises a real lo
 
 The e2e config loads only `.env.test`; it does not load `.env`. Before connecting, the application also refuses test connections unless the host is loopback (`localhost`, `127.0.0.1`, or `::1`) and the database name ends in `_test`. Keep the test role restricted to the test database. The HTTP tests use the real test database and app modules; email delivery is captured by a fake mail service, and the conversion worker is replaced with a deterministic test adapter to avoid starting background worker threads.
 
-The HTTP e2e tests are split by feature in `test/`: `auth.e2e-spec.ts`, `users.e2e-spec.ts`, `rbac.e2e-spec.ts`, `settings.e2e-spec.ts`, `conversion.e2e-spec.ts`, and `health.e2e-spec.ts`. Shared app setup, fixtures, and authentication helpers live in `test/e2e/e2e-test-context.ts`.
+The HTTP e2e tests are split by feature in `test/`: `auth.e2e-spec.ts`, `users.e2e-spec.ts`, `avatar.e2e-spec.ts`, `rbac.e2e-spec.ts`, `settings.e2e-spec.ts`, `conversion.e2e-spec.ts`, and `health.e2e-spec.ts`. Shared app setup, fixtures, and authentication helpers live in `test/e2e/e2e-test-context.ts`. Avatar storage is replaced with an in-memory fake (`FakeAvatarStorage`), so e2e runs never need Supabase credentials, and per-route throttle counters are reset before each test.
 
-There are currently no TypeORM migration files, so the test database uses `POSTGRES_SYNCHRONIZE=true` to create its schema from the entities. The e2e suite truncates its tables before testing and clears them again afterward, while preserving the schema. Do not use this test configuration with a database containing data you need.
+The migrations in `src/database/migrations` are incremental and do not create the base schema, so the test database uses `POSTGRES_SYNCHRONIZE=true` to create its schema from the entities. The e2e suite truncates its tables before testing and clears them again afterward, while preserving the schema. Do not use this test configuration with a database containing data you need.
+
+## Avatar storage (Supabase)
+
+`PUT /api/v1/users/:id/photo` (multipart, `file` field) and `DELETE /api/v1/users/:id/photo` manage uploaded profile avatars. Uploads are re-encoded to WebP (max 1024×1024, metadata stripped) and stored in Supabase Storage under `{userId}/{uuid}.webp`. These endpoints are the only way to set an avatar: user creation and `PATCH /api/v1/users/:id` do not accept a `photo` URL, and profile updates never change the current avatar. The `users.photo` column stores the avatar's bucket-relative storage path (`null` until an avatar is uploaded); the `photo` field in profile and admin-list responses is resolved from it to the object's public URL, or `null` when no avatar is set.
+
+The `MoveAvatarPathToPhoto` migration moves stored avatar paths from the former `avatarStoragePath` column into `users.photo` and drops `avatarStoragePath`. Legacy external photo URLs left in `photo` are cleared, not imported; reverting the migration cannot restore them.
+
+**Configuration** (server-side only; the app fails to start without them unless `NODE_ENV=test`):
+
+| Variable | Purpose |
+|----------|---------|
+| `SUPABASE_URL` | Project URL, e.g. `https://<project-ref>.supabase.co` |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service-role key used for writes/deletes. Never expose it to clients or commit it. |
+| `SUPABASE_AVATARS_BUCKET` | Bucket name (default `avatars`) |
+
+**Bucket setup** (manual, in the Supabase dashboard; the app does not provision it):
+
+1. Create a bucket named `avatars` (or your `SUPABASE_AVATARS_BUCKET`) and mark it **Public** so profile photos can be read without authentication.
+2. Set *Allowed MIME types* to `image/webp` (the backend only stores re-encoded WebP) and *File size limit* to `5 MB`.
+3. Do not add storage policies that allow `anon` or `authenticated` roles to insert, update, or delete objects. Only the backend's service-role key writes to the bucket.
+4. Record which project/bucket each environment uses in its deployment configuration. Free-plan quotas and project pausing are provider constraints. Monitor storage errors (`AVATAR_STORAGE_UPLOAD` log events) and quota usage.
+
+**Cleanup:** replaced or removed objects are deleted after the database update commits. If a deletion fails, a row is written to `avatar_cleanup_tasks` and retried every 10 minutes, up to 10 attempts. Rows that stay behind with `attempts >= 10` need manual follow-up, and `AVATAR_CLEANUP_RETRY` events with `status: "exhausted"` are logged at error level.
 
 ## Libraries
 

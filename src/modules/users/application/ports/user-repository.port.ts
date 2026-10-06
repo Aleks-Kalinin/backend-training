@@ -12,6 +12,15 @@ export interface UserSearch {
   cursor?: { id: string; createdAt: Date };
 }
 
+export interface AvatarChange {
+  photo: string | null;
+}
+
+export interface AvatarChangeResult {
+  user: User;
+  previousStoragePath: string | null;
+}
+
 export interface UserRepository {
   findByEmail(email: string): Promise<User | null>;
   findById(userId: string): Promise<User | null>;
@@ -21,4 +30,13 @@ export interface UserRepository {
   ): User;
   save(user: User): Promise<User>;
   remove(user: User): Promise<void>;
+  /**
+   * Atomically replaces the user's avatar reference, returning the storage path
+   * that was referenced before the change. Returns `null` if the user no
+   * longer exists.
+   */
+  updateAvatar(
+    userId: string,
+    change: AvatarChange,
+  ): Promise<AvatarChangeResult | null>;
 }

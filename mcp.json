@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "postgres": {
+      "command": "powershell",
+      "args": [
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "D:\\Work\\Internal\\backend-training\\tools\\postgres-mcp.ps1"
+      ]
+    }
+  }
+}

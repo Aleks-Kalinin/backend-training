@@ -29,6 +29,7 @@ import { DeleteUserDto } from '../dto/delete-user.dto';
 import { GetUsersQueryDto } from '../dto/get-users-query.dto';
 import { InitiateEmailChangeDto } from '../dto/initiate-email-change.dto';
 import { UpdateUserDto } from '../dto/update-user.dto';
+import { AvatarCleanupService } from './avatar-cleanup.service';
 import type { UserDeletionJobRepository } from './ports/deletion-job-repository.port';
 import { USER_DELETION_JOB_REPOSITORY } from './ports/deletion-job-repository.port';
 import type { UserRoleRepository } from './ports/role-repository.port';
@@ -98,6 +99,7 @@ export class UsersService {
     private readonly verificationService: VerificationService,
     private readonly mailService: MailService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly avatarCleanupService: AvatarCleanupService,
   ) {}
 
   private logUserUpdateAudit({
@@ -558,7 +560,13 @@ export class UsersService {
       job.status = DeletionJobStatus.IN_PROGRESS;
       await this.userDeletionJobRepository.save(job);
 
+      const avatarStoragePath = user.photo ?? null;
       await this.usersRepository.remove(user);
+      await this.avatarCleanupService.removeUserAvatar({
+        storagePath: avatarStoragePath,
+        actorUserId: job.requestedBy ?? String(user.userId),
+        targetUserId: String(job.userId),
+      });
 
       job.status = DeletionJobStatus.DONE;
     } catch (error) {

@@ -5,7 +5,9 @@
 * **Target Roles:**
   * **Self:** Can modify allowed personal profile fields. *Direct email modification is prohibited.*
   * **Admin:** Can directly modify any profile field for any user, including email addresses.
-* **Dependencies:** Access JWT (Cookie), RBAC Module, Email Dispatcher (for verification workflows), File Storage Service (for avatar/photo uploads).
+* **Dependencies:** Access JWT (Cookie), RBAC Module, Email Dispatcher (for verification workflows), Supabase avatar upload endpoint.
+
+* **Avatar behavior:** Avatar files are uploaded and removed only through the dedicated endpoints in [spec 13](../13-avatar-upload/spec.md). The profile PATCH contract does not accept a `photo` URL and updates to unrelated fields must preserve the current avatar.
 
 ## 2. Technical Contract
 

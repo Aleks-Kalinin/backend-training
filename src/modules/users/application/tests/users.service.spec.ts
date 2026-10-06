@@ -42,6 +42,7 @@ import {
   UserRoleRepository,
 } from '../ports/role-repository.port';
 import { USER_REPOSITORY, UserRepository } from '../ports/user-repository.port';
+import { AvatarCleanupService } from '../avatar-cleanup.service';
 import { UsersService } from '../users.service';
 
 describe('UsersService', () => {
@@ -65,6 +66,7 @@ describe('UsersService', () => {
   let verificationService: jest.Mocked<VerificationService>;
   let mailService: jest.Mocked<MailService>;
   let eventEmitter: jest.Mocked<EventEmitter2>;
+  let avatarCleanupService: jest.Mocked<AvatarCleanupService>;
 
   const mockUser: User = {
     userId: '11111111-1111-1111-1111-111111111111',
@@ -146,6 +148,11 @@ describe('UsersService', () => {
       emit: jest.fn(),
     } as unknown as jest.Mocked<EventEmitter2>;
 
+    avatarCleanupService = {
+      removeObject: jest.fn(() => Promise.resolve('removed')),
+      removeUserAvatar: jest.fn(() => Promise.resolve()),
+    } as unknown as jest.Mocked<AvatarCleanupService>;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         UsersService,
@@ -158,6 +165,7 @@ describe('UsersService', () => {
         { provide: VerificationService, useValue: verificationService },
         { provide: MailService, useValue: mailService },
         { provide: EventEmitter2, useValue: eventEmitter },
+        { provide: AvatarCleanupService, useValue: avatarCleanupService },
       ],
     }).compile();
 
@@ -460,7 +468,7 @@ describe('UsersService', () => {
       await expect(
         service.updateUser({
           userId,
-          updateData: { photo: 'http://pic.jpg' },
+          updateData: { status: UserStatus.ACTIVE },
         }),
       ).rejects.toThrow('User not found');
     });
@@ -477,7 +485,7 @@ describe('UsersService', () => {
       await expect(
         service.updateUser({
           userId,
-          updateData: { photo: 'http://pic.jpg' },
+          updateData: { status: UserStatus.ACTIVE },
           requestingUser: otherUserPayload,
         }),
       ).rejects.toThrow(ForbiddenException);
@@ -515,7 +523,7 @@ describe('UsersService', () => {
     it('successfully updates user data as admin or self', async () => {
       usersRepository.findOne.mockResolvedValue({ ...mockUser });
 
-      const updateDto: UpdateUserDto = { photo: 'http://newphoto.png' };
+      const updateDto: UpdateUserDto = { status: UserStatus.BLOCKED };
 
       const result = await service.updateUser({
         userId,
@@ -524,9 +532,47 @@ describe('UsersService', () => {
       });
 
       expect(usersRepository.save).toHaveBeenCalledWith(
-        expect.objectContaining({ photo: 'http://newphoto.png' }),
+        expect.objectContaining({ status: UserStatus.BLOCKED }),
       );
       expect(result).toBeDefined();
+      expect(avatarCleanupService.removeObject).not.toHaveBeenCalled();
+    });
+
+    it('preserves the uploaded avatar when updating unrelated fields', async () => {
+      usersRepository.findOne.mockResolvedValue({
+        ...mockUser,
+        photo: `${userId}/current.webp`,
+      });
+
+      const result = await service.updateUser({
+        userId,
+        updateData: { status: UserStatus.ACTIVE },
+        requestingUser: mockAdminUserPayload,
+      });
+
+      expect(result.photo).toBe(`${userId}/current.webp`);
+      expect(avatarCleanupService.removeObject).not.toHaveBeenCalled();
+    });
+
+    it('does not touch the avatar when a self update is saved', async () => {
+      usersRepository.findOne.mockResolvedValue({
+        ...mockUser,
+        photo: `${userId}/current.webp`,
+      });
+
+      await service.updateUser({
+        userId,
+        updateData: { status: UserStatus.ACTIVE },
+        requestingUser: mockRegularUserPayload,
+      });
+
+      expect(usersRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          photo: `${userId}/current.webp`,
+        }),
+      );
+      expect(avatarCleanupService.removeObject).not.toHaveBeenCalled();
+      expect(avatarCleanupService.removeUserAvatar).not.toHaveBeenCalled();
     });
   });
 
@@ -762,6 +808,56 @@ describe('UsersService', () => {
           errorMessage: 'DB Error',
         }),
       );
+      expect(avatarCleanupService.removeUserAvatar).not.toHaveBeenCalled();
+    });
+
+    it('removes the stored avatar object after deleting the user', async () => {
+      const job: UserDeletionJob = {
+        id: 'job-1',
+        userId: mockUser.userId,
+        status: DeletionJobStatus.IN_PROGRESS,
+        mode: DeletionExecutionMode.SYNC,
+        requestedBy: mockAdminUserPayload.sub,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      await service.processUserDeletion({
+        job,
+        user: { ...mockUser, photo: `${mockUser.userId}/a.webp` },
+        operationType: 'admin',
+      });
+
+      expect(avatarCleanupService.removeUserAvatar).toHaveBeenCalledWith({
+        storagePath: `${mockUser.userId}/a.webp`,
+        actorUserId: mockAdminUserPayload.sub,
+        targetUserId: mockUser.userId,
+      });
+      expect(job.status).toBe(DeletionJobStatus.DONE);
+    });
+
+    it('marks the job FAILED when avatar cleanup can be neither completed nor recorded', async () => {
+      const job: UserDeletionJob = {
+        id: 'job-1',
+        userId: mockUser.userId,
+        status: DeletionJobStatus.IN_PROGRESS,
+        mode: DeletionExecutionMode.SYNC,
+        requestedBy: mockUser.userId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      avatarCleanupService.removeUserAvatar.mockRejectedValueOnce(
+        new Error('Avatar cleanup could not be completed or recorded'),
+      );
+
+      await expect(
+        service.processUserDeletion({
+          job,
+          user: { ...mockUser, photo: `${mockUser.userId}/a.webp` },
+          operationType: 'self',
+        }),
+      ).rejects.toThrow('Avatar cleanup could not be completed or recorded');
+      expect(job.status).toBe(DeletionJobStatus.FAILED);
     });
   });
 
